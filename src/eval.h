@@ -8,6 +8,6 @@
  * NODE_EXPR_STMT nodes print their result to stdout automatically.
  * The caller owns the tree and must call astFree() after evaluation.
  */
-int evalAST(ASTNode* node, SymTable* table);
+int evalAST(ASTNode *node, SymTable *table);
 
 #endif /* EVAL_H_ */
