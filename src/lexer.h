@@ -8,25 +8,27 @@ typedef enum {
   MINUS,
   MUL,
   DIV,
-  MOD, // arithmetic
+  MOD,
   AND,
-  OR, // logical
+  OR,
+  NOT,
   BIT_AND,
   BIT_OR,
-  BIT_XOR, // bitwise
+  BIT_XOR,
+  BIT_NOT,
   LSHIFT,
-  RSHIFT, // bit-shift
+  RSHIFT,
   ASSGN,
   EQ,
   NEG,
-  NEQ, // = == ! !=
+  NEQ,
   INCR,
-  DECR, // ++ --
+  DECR,
   ADD_ASSGN,
   SUB_ASSGN,
   MUL_ASSGN,
   MOD_ASSIGN,
-  DIV_ASSGN, // op-assign
+  DIV_ASSGN,
   LSHIFT_ASSGN,
   RSHIFT_ASSGN,
   LPAREN,
@@ -34,13 +36,18 @@ typedef enum {
   LBRACE,
   RBRACE,
   LBOX,
-  RBOX, // brackets
+  RBOX,
+  LT,
+  LET,
+  GT,
+  GET,
+  COMMA,
   SEMICOLON,
   COLON,
   NUMBER,
   IDENT,
   KEYWORD,
-  NULL_TYPE // value / sentinel
+  NULL_TYPE
 } TokenType;
 
 /* Keywords recognised by the lexer. */

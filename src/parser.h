@@ -28,6 +28,8 @@ typedef enum {
   NODE_FOR,
   NODE_WHILE,
   NODE_PRINT,
+  NODE_FN,
+  NODE_FN_CALL,
   NODE_NULL
 } NodeType;
 
@@ -70,6 +72,24 @@ typedef struct ASTNode
       struct ASTNode *right;
       TokenType op;
     } binOp;
+    struct
+    {
+      char *name;
+      struct ASTNode *paramList;
+      struct ASTNode *body;
+    } funcNode;
+    struct
+    {
+      char *name;
+      struct ASTNode *argList;
+    } funcCall;
+    struct
+    {
+      struct ASTNode *init;
+      struct ASTNode *cond;
+      struct ASTNode *update;
+      struct ASTNode *body;
+    } forNode;
   };
 } ASTNode;
 
@@ -140,6 +160,10 @@ ASTNode *astIf(ASTNode *condition, ASTNode *thenBlock, ASTNode *elseBlock);
 ASTNode *astElse(ASTNode *elseBlock);
 ASTNode *astWhile(ASTNode *condition, ASTNode *body);
 ASTNode *astPrint(ASTNode *expression);
+ASTNode *astFunction(char *funcName, ASTNode *paramList, ASTNode *body);
+ASTNode *astFuncCall(char *name, ASTNode *argList);
+ASTNode *astFor(ASTNode *init, ASTNode *condition, ASTNode *update,
+                ASTNode *body);
 void astFree(ASTNode *node);
 
 /* ── Parse functions (defined in parser.c)
@@ -157,6 +181,7 @@ ASTNode *parseIf(Parser *p);
 ASTNode *parseWhile(Parser *p);
 ASTNode *parseFor(Parser *p);
 ASTNode *parseFunction(Parser *p);
+ASTNode *parseParams(Parser *p);
 ASTNode *parseExpr(Parser *p);
 ASTNode *parseLogicOr(Parser *p);
 ASTNode *parseLogicAnd(Parser *p);
@@ -170,5 +195,8 @@ ASTNode *parseTerm(Parser *p);
 ASTNode *parseUnary(Parser *p);
 ASTNode *parsePostfix(Parser *p);
 ASTNode *parsePrimary(Parser *p);
+ASTNode *parseArgList(Parser *p);
+ASTNode *parseForClause(Parser *p);
+ASTNode *parseRelational(Parser *p);
 
 #endif /* PARSER_H_ */

@@ -108,6 +108,8 @@ ASTNode *parseStmt(Parser *p) {
       return parseFor(p);
     case KW_FN:
       return parseFunction(p);
+    default:
+      break;
     }
   }
   case IDENT: {
@@ -127,13 +129,87 @@ ASTNode *parseStmt(Parser *p) {
   }
 }
 
-// TODO: implement parseFunction()
-
 // <func_decl>  ::= "func" IDENT "(" <param_list> ")" <block>
+
+ASTNode *parseFunction(Parser *p) {
+  if (parserPeek(p) != IDENT) {
+    p->had_error = 1;
+    return NULL;
+  }
+
+  char *funcName = parserConsume(p).name;
+  if (parserConsume(p).type != LPAREN) {
+    free(funcName);
+    p->had_error = 1;
+    return NULL;
+  }
+
+  ASTNode *paramList = parseParams(p);
+  if (!paramList) {
+    free(funcName);
+    p->had_error = 1;
+    return NULL;
+  }
+
+  if (parserConsume(p).type != RPAREN) {
+    free(funcName);
+    astFree(paramList);
+    p->had_error = 1;
+    return NULL;
+  }
+
+  ASTNode *body = parseBlock(p);
+  if (!body) {
+    free(funcName);
+    astFree(paramList);
+    p->had_error = 1;
+    return NULL;
+  }
+
+  return astFunction(funcName, paramList, body);
+}
+
 // <param_list> ::= ε
 //                | IDENT { "," IDENT }
 
-ASTNode *parseFunction(Parser *p);
+#define PARAMS_INIT 4
+
+ASTNode *parseParams(Parser *p) {
+  ASTNode **params = NULL;
+  size_t paramIdx = 0, paramCap = 0;
+
+  if (parserPeek(p) == IDENT) {
+    params = calloc(PARAMS_INIT, sizeof(*params));
+    if (!params) {
+      p->had_error = 1;
+      return NULL;
+    }
+    paramCap = PARAMS_INIT;
+  }
+
+  while (parserPeek(p) == IDENT) {
+    if (paramIdx >= paramCap) {
+      paramCap <<= 1;
+      ASTNode **tmp = realloc(params, paramCap * sizeof(*params));
+      if (!tmp) {
+        for (size_t i = 0; i < paramCap; i++) {
+          astFree(params[i]);
+        }
+        free(params);
+        p->had_error = 1;
+        return NULL;
+      }
+      params = tmp;
+    }
+    ASTNode *param = astVar(parserConsume(p).name);
+    params[paramIdx++] = param;
+    if (parserPeek(p) != COMMA)
+      break;
+    parserConsume(p);
+  }
+
+  return astStmts(params, paramIdx);
+}
 
 // <if_stmt>    ::= "if"   "(" <expr> ")" <block>
 // [ "else" <block> ]
@@ -205,14 +281,85 @@ ASTNode *parseWhile(Parser *p) {
   return astWhile(condition, body);
 }
 
-// TODO: implement parseFor based on grammar below
-
 // <for_stmt>   ::= "for" "(" <for_clause> ";" <expr> ";" <for_clause> ")"
-// <block> <for_clause> ::= ε
+// <block>
+
+ASTNode *parseFor(Parser *p) {
+  if (parserConsume(p).type != LPAREN) {
+    p->had_error = 1;
+    return NULL;
+  }
+
+  ASTNode *initiation = parseForClause(p);
+  if (!initiation) {
+    p->had_error = 1;
+    return NULL;
+  }
+
+  if (parserConsume(p).type != SEMICOLON) {
+    astFree(initiation);
+    p->had_error = 1;
+    return NULL;
+  }
+
+  ASTNode *condition = parseExpr(p);
+  if (!condition) {
+    astFree(initiation);
+    p->had_error = 1;
+    return NULL;
+  }
+
+  if (parserConsume(p).type != SEMICOLON) {
+    astFree(initiation);
+    astFree(condition);
+    p->had_error = 1;
+    return NULL;
+  }
+
+  ASTNode *updateClause = parseForClause(p);
+  if (!updateClause) {
+    astFree(initiation);
+    astFree(condition);
+    p->had_error = 1;
+    return NULL;
+  }
+
+  if (parserConsume(p).type != RPAREN) {
+    astFree(initiation);
+    astFree(condition);
+    astFree(updateClause);
+    p->had_error = 1;
+    return NULL;
+  }
+
+  ASTNode *body = parseBlock(p);
+  if (!body) {
+    astFree(initiation);
+    astFree(condition);
+    astFree(updateClause);
+    p->had_error = 1;
+    return NULL;
+  }
+
+  return astFor(initiation, condition, updateClause, body);
+}
+
+// <for_clause> ::= ε
 //                | IDENT <assign_op> <expr>
 //                | <expr>
 
-ASTNode *parseFor(Parser *p);
+ASTNode *parseForClause(Parser *p) {
+  if (parserPeek(p) == IDENT) {
+    if (isAssgnOp(parserPeek2(p))) {
+      char *name = parserConsume(p).name;
+      TokenType op = parserConsume(p).type;
+      ASTNode *rval = parseExpr(p);
+      return astAssgn(op, name, rval);
+    }
+  }
+
+  return parseExpr(p);
+}
 
 // <expr>       ::= <logic_or>
 
@@ -283,21 +430,32 @@ ASTNode *parseBitAnd(Parser *p) {
   return left;
 }
 
-// TODO: rewrite the parseEquality and parseRelational functions
-
 // <equality>   ::= <relational>
 //                | <equality> "==" <relational>
 //                | <equality> "!=" <relational>
+
+ASTNode *parseEquality(Parser *p) {
+  ASTNode *left = parseRelational(p);
+  while (parserPeek(p) == EQ || parserPeek(p) == NEQ) {
+    TokenType op = parserConsume(p).type;
+    left = astBinOp(op, left, parseRelational(p));
+  }
+
+  return left;
+}
+
 // <relational> ::= <shift>
 //                | <relational> "<"  <shift>
 //                | <relational> "<=" <shift>
 //                | <relational> ">"  <shift>
 //                | <relational> ">=" <shift>
-ASTNode *parseEquality(Parser *p) {
+
+ASTNode *parseRelational(Parser *p) {
   ASTNode *left = parseShift(p);
-  if (parserPeek(p) == EQ || parserPeek(p) == NEQ) {
+  while (parserPeek(p) == LT || parserPeek(p) == GT || parserPeek(p) == LET ||
+         parserPeek(p) == GET) {
     TokenType op = parserConsume(p).type;
-    return astBinOp(op, left, parseEquality(p));
+    left = astBinOp(op, left, parseShift(p));
   }
 
   return left;
@@ -311,8 +469,7 @@ ASTNode *parseShift(Parser *p) {
   ASTNode *left = parseAdditive(p);
   while (parserPeek(p) == LSHIFT || parserPeek(p) == RSHIFT) {
     TokenType op = parserConsume(p).type;
-    ASTNode *right = parseAdditive(p);
-    left = astBinOp(op, left, right);
+    left = astBinOp(op, left, parseAdditive(p));
   }
 
   return left;
@@ -358,7 +515,7 @@ ASTNode *parseTerm(Parser *p) {
 
 ASTNode *parseUnary(Parser *p) {
   TokenType tp = parserPeek(p);
-  if (tp == MINUS || tp == NEG || tp == INCR || tp == DECR) {
+  if (tp == MINUS || tp == INCR || tp == DECR || tp == NOT || tp == BIT_NOT) {
     TokenType op = parserConsume(p).type;
 
     ASTNode *operand = parseUnary(p);
@@ -392,14 +549,10 @@ ASTNode *parsePostfix(Parser *p) {
     return primary;
 }
 
-// TODO: implement grammar below
-
 // <primary>    ::= NUMBER
 //                | IDENT
 //                | IDENT "(" <arg_list> ")"
 //                | "(" <expr> ")"
-// <arg_list>   ::= ε
-//                | <expr> { "," <expr> }
 // NUMBER       ::= DIGIT { DIGIT }
 // IDENT        ::= IDENT_START { IDENT_CHAR }
 // IDENT_START  ::= [a-zA-Z_]
@@ -412,7 +565,12 @@ ASTNode *parsePrimary(Parser *p) {
   if (tp == LPAREN) {
     parserConsume(p);
     ASTNode *expr = parseExpr(p);
+    if (!expr) {
+      p->had_error = 1;
+      return NULL;
+    }
     if (parserConsume(p).type != RPAREN) {
+      astFree(expr);
       p->had_error = 1;
       return NULL;
     }
@@ -420,9 +578,68 @@ ASTNode *parsePrimary(Parser *p) {
   } else if (tp == NUMBER) {
     return astNum(parserConsume(p).val);
   } else if (tp == IDENT) {
-    return astVar(parserConsume(p).name);
+    char *name = parserConsume(p).name;
+    if (parserPeek(p) == LPAREN) {
+      parserConsume(p);
+      ASTNode *argList = parseArgList(p);
+      if (!argList) {
+        p->had_error = 1;
+        return NULL;
+      }
+      if (parserConsume(p).type != RPAREN) {
+        astFree(argList);
+        p->had_error = 1;
+        return NULL;
+      }
+
+      return astFuncCall(name, argList);
+    }
+    return astVar(name);
   }
 
   p->had_error = 1;
   return NULL;
+}
+
+// <arg_list>   ::= ε
+//                | <expr> { "," <expr> }
+
+#define ARGS_INIT 4
+
+ASTNode *parseArgList(Parser *p) {
+  size_t argIdx = 0, argCap = ARGS_INIT;
+
+  ASTNode **args = calloc(ARGS_INIT, sizeof(*args));
+  if (!args) {
+    p->had_error = 1;
+    return NULL;
+  }
+
+  while (parserPeek(p) != RPAREN) {
+    if (argIdx >= argCap) {
+      argCap <<= 1;
+      ASTNode **tmp = realloc(args, argCap * sizeof(*args));
+      if (!tmp) {
+        for (size_t i = 0; i < argIdx; i++) {
+          astFree(args[i]);
+        }
+        free(args);
+        p->had_error = 1;
+        return NULL;
+      }
+      args = tmp;
+    }
+    ASTNode *arg = parseExpr(p);
+    args[argIdx++] = arg;
+    if (parserPeek(p) != COMMA)
+      break;
+    parserConsume(p);
+  }
+
+  if (argIdx == 0) {
+    free(args);
+    args = NULL;
+  }
+
+  return astStmts(args, argIdx);
 }

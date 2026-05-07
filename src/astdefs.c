@@ -200,6 +200,40 @@ ASTNode *astWhile(ASTNode *condition, ASTNode *body) {
   return node;
 }
 
+ASTNode *astFunction(char *funcName, ASTNode *paramList, ASTNode *body) {
+  ASTNode *node = astInit();
+
+  *node = (ASTNode){ .type = NODE_FN,
+                     .funcNode = { .name = strdup(funcName),
+                                   .paramList = paramList,
+                                   .body = body } };
+
+  return node;
+}
+
+ASTNode *astFuncCall(char *funcName, ASTNode *argList) {
+  ASTNode *node = astInit();
+
+  *node =
+      (ASTNode){ .type = NODE_FN_CALL,
+                 .funcCall = { .name = strdup(funcName), .argList = argList } };
+
+  return node;
+}
+
+ASTNode *astFor(ASTNode *init, ASTNode *condition, ASTNode *update,
+                ASTNode *body) {
+  ASTNode *node = astInit();
+
+  *node = (ASTNode){ .type = NODE_FOR,
+                     .forNode = { .init = init,
+                                  .cond = condition,
+                                  .update = update,
+                                  .body = body } };
+
+  return node;
+}
+
 void astFree(ASTNode *node) {
   if (!node)
     return;
@@ -231,12 +265,29 @@ void astFree(ASTNode *node) {
     }
     free(node->block.stmts);
     break;
+  case NODE_FN:
+    free(node->funcNode.name);
+    astFree(node->funcNode.body);
+    astFree(node->funcNode.paramList);
+    break;
+  case NODE_FOR:
+    astFree(node->forNode.body);
+    astFree(node->forNode.init);
+    astFree(node->forNode.cond);
+    astFree(node->forNode.update);
+    break;
+  case NODE_FN_CALL:
+    free(node->funcCall.name);
+    astFree(node->funcCall.argList);
+    break;
   case NODE_EXPR_STMT:
   case NODE_UNARY:
   case NODE_PRE_INC:
   case NODE_PRE_DEC:
   case NODE_POST_INC:
   case NODE_POST_DEC:
+  case NODE_RETURN:
+  case NODE_PRINT:
     astFree(node->standaloneNode.operand);
     break;
   default:
