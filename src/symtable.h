@@ -16,13 +16,15 @@ typedef enum {
 } SymResult;
 
 /* One name→value binding. name is heap-allocated (strdup). */
-typedef struct {
+typedef struct
+{
   char *name;
   int val;
 } Symbol;
 
 /* Flat array symbol table — linear scan, sufficient for interactive use. */
-typedef struct {
+typedef struct
+{
   Symbol entries[SYM_CAPACITY];
   int count;
 } SymTable;

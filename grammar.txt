@@ -1,37 +1,6 @@
-; ════════════════════════════════════════════════════════════════════════════
-;  Chi (χ) — Grammar Specification
-;  Turing-complete integer scripting language.
-;  Evolved from ALG.  BNF variant; ε = empty production.
-;  Comments begin with ; and extend to end of line.
-; ════════════════════════════════════════════════════════════════════════════
-
-
-; ── Top level ───────────────────────────────────────────────────────────────
-
 <program>    ::= <stmts>
 <stmts>      ::= <stmt> <stmts> | ε
-
-
-; ── Block ───────────────────────────────────────────────────────────────────
-;
-; A block is a brace-delimited sequence of statements.  It introduces a new
-; lexical scope: variables declared (first-assigned) inside a block are local
-; to it and shadow any outer binding with the same name.  On block exit the
-; inner binding is discarded and the outer one is restored.
-
 <block>      ::= "{" <stmts> "}"
-
-
-; ── Statements ──────────────────────────────────────────────────────────────
-;
-; Precedence of statement forms (tried top to bottom during parsing):
-;   1. Keywords that start with a reserved word are unambiguous.
-;   2. IDENT followed by an assign_op is an assignment statement.
-;   3. Anything else is an expression statement.
-;
-; Assignment is only at statement level; chained assignment (a = b = 5) is
-; not supported.  This matches ALG's original design.
-
 <stmt>       ::= <func_decl>
                | <if_stmt>
                | <while_stmt>
@@ -43,234 +12,66 @@
                | "show"
                | IDENT <assign_op> <expr>
                | <expr>
-
-
-; ── Function declaration ────────────────────────────────────────────────────
-;
-; Functions are declared at any statement position (including nested inside
-; other functions or blocks).  A function closes over no outer variables —
-; it operates entirely in its own local scope plus the global scope.
-; Calling a function that has not been declared is a runtime error.
-; Recursion is legal.
-
 <func_decl>  ::= "func" IDENT "(" <param_list> ")" <block>
 <param_list> ::= ε
                | IDENT { "," IDENT }
-
-
-; ── Function call ───────────────────────────────────────────────────────────
-;
-; Calls are expressions (live in <primary>).  Argument count must match
-; parameter count exactly; mismatch is a runtime error.
-
 <arg_list>   ::= ε
                | <expr> { "," <expr> }
-
-
-; ── Control flow ────────────────────────────────────────────────────────────
-;
-; Conditions are integers: 0 is false, any non-zero value is true.
-; This is consistent with the rest of the language (no boolean type).
-;
-; "break" and "continue" are only legal inside a while or for body;
-; using them outside a loop is a compile-time error.
-;
-; "return" without a value returns 0 implicitly.
-; "return" outside a function is a runtime error.
-
 <if_stmt>    ::= "if"   "(" <expr> ")" <block>
                  { "elif" "(" <expr> ")" <block> }
                  [ "else" <block> ]
-
 <while_stmt> ::= "while" "(" <expr> ")" <block>
-
 <for_stmt>   ::= "for" "(" <for_clause> ";" <expr> ";" <for_clause> ")" <block>
-
-; <for_clause> covers both expression statements (e.g. i++) and assignments
-; (e.g. i = 0, i += 2).  Either or both may be empty.
 <for_clause> ::= ε
                | IDENT <assign_op> <expr>
                | <expr>
-
-
-; ── Assignment operators ────────────────────────────────────────────────────
-;
-; %=  is now included (was intentionally absent in ALG).
-; All compound operators desugar to:  IDENT = IDENT <op> <expr>
-
 <assign_op>  ::= "="  | "+=" | "-=" | "*=" | "/=" | "%="
                | "<<=" | ">>="
-
-
-; ── Expressions ─────────────────────────────────────────────────────────────
-;
-; Expressions produce an integer value.  There is no boolean type; every
-; relational and logical operator returns 0 or 1.
-
 <expr>       ::= <logic_or>
-
-
-; Precedence level 10 — weakest binary operator
-; right-associative (right-recursive)
 <logic_or>   ::= <logic_and>
                | <logic_and> "||" <logic_or>
-
-
-; Precedence level 9
-; right-associative (right-recursive)
 <logic_and>  ::= <bit_or>
                | <bit_or> "&&" <logic_and>
-
-
-; Precedence level 8
-; right-associative (right-recursive)
 <bit_or>     ::= <bit_xor>
                | <bit_xor> "|" <bit_or>
-
-
-; Precedence level 7
-; right-associative (right-recursive)
 <bit_xor>    ::= <bit_and>
                | <bit_and> "^" <bit_xor>
-
-
-; Precedence level 6
-; right-associative (right-recursive)
 <bit_and>    ::= <equality>
                | <equality> "&" <bit_and>
-
-
-; Precedence level 5
-; left-associative (iterative)
-;
-; CHANGE FROM ALG: equality is now LEFT-associative, matching C and every
-; other major language.  The original right-recursive form produced
-; unintuitive results:  a == b == c  parsed as  a == (b == c),  meaning
-; "is a equal to the truth value of (b == c)?" — almost certainly not what
-; was intended.  Left-associativity still makes a == b == c legal syntax,
-; but result remains non-obvious; users should use explicit parentheses.
 <equality>   ::= <relational>
                | <equality> "==" <relational>
                | <equality> "!=" <relational>
-
-
-; Precedence level 4.5  — NEW
-; left-associative (iterative)
-;
-; Relational operators are inserted between equality and shift.  This matches
-; C precedence exactly.  They return 1 (true) or 0 (false) as integers.
 <relational> ::= <shift>
                | <relational> "<"  <shift>
                | <relational> "<=" <shift>
                | <relational> ">"  <shift>
                | <relational> ">=" <shift>
-
-
-; Precedence level 4
-; left-associative (iterative)
 <shift>      ::= <additive>
                | <shift> "<<" <additive>
                | <shift> ">>" <additive>
-
-
-; Precedence level 3
-; left-associative (iterative)
 <additive>   ::= <term>
                | <additive> "+" <term>
                | <additive> "-" <term>
-
-
-; Precedence level 2
-; left-associative (iterative)
 <term>       ::= <unary>
                | <term> "*" <unary>
                | <term> "/" <unary>
                | <term> "%" <unary>
-
-
-; Precedence level 1 — tightest operators
-; right-associative (right-recursive)
-;
-; NEW: ~ (bitwise NOT) added at unary level.
-; ++/-- remain lvalue-only; applying to a literal is a parse error.
 <unary>      ::= <postfix>
                | "-"  <unary>
                | "!"  <unary>
                | "~"  <unary>
                | "++" <unary>
                | "--" <unary>
-
-
-; Postfix operators bind tighter than any prefix unary.
-; They are still lvalue-only (IDENT or parenthesised lvalue).
 <postfix>    ::= <primary>
                | <primary> "++"
                | <primary> "--"
-
-
-; Primary — atoms and grouping
 <primary>    ::= NUMBER
                | IDENT
                | IDENT "(" <arg_list> ")"
                | "(" <expr> ")"
-
-
-; ── Lexical rules ────────────────────────────────────────────────────────────
-
 NUMBER       ::= DIGIT { DIGIT }
 IDENT        ::= IDENT_START { IDENT_CHAR }
 IDENT_START  ::= [a-zA-Z_]
 IDENT_CHAR   ::= [a-zA-Z0-9_]
 DIGIT        ::= [0-9]
-
-; Comments: a semicolon outside a string context begins a line comment.
 COMMENT      ::= ";" { any char except newline }
-
-
-; ── Reserved keywords ────────────────────────────────────────────────────────
-;
-; The following identifiers are reserved and may not be used as variable or
-; function names:
-;
-;   if  elif  else  while  for  break  continue
-;   func  return  print  show
-
-
-; ── Operator precedence table (tightest to weakest) ─────────────────────────
-;
-;  Level  Operators                  Assoc        New in Chi?
-;  ─────  ─────────────────────────  ───────────  ───────────
-;    1    - ! ~ ++ --  (prefix)      right        ~ is new
-;         ++ --        (postfix)     left (post)
-;    2    * / %                      left
-;    3    + -                        left
-;    4    << >>                      left
-;   4.5   < <= > >=                  left         NEW level
-;    5    == !=                      left         was right
-;    6    &                          right
-;    7    ^                          right
-;    8    |                          right
-;    9    &&                         right
-;   10    ||                         right
-;
-;
-; ── What was intentionally absent in ALG, now added in Chi ──────────────────
-;
-;   < <= > >=   relational operators      — added at level 4.5
-;   ~           bitwise NOT               — added at unary level
-;   %=          modulo-assign             — added to <assign_op>
-;   if/elif/else                          — added
-;   while                                 — added  (Turing-complete milestone)
-;   for                                   — added
-;   break / continue                      — added
-;   func / return                         — added
-;   print                                 — added
-;   function calls as expressions         — added to <primary>
-;
-; ── Still intentionally absent ──────────────────────────────────────────────
-;
-;   strings, floats, arrays               (integer-only language)
-;   hex/octal literals                    (decimal only)
-;   chained assignment  a = b = 5         (not supported)
-;   first-class functions / closures      (no function values, only calls)
-;   variadic functions                    (fixed arity only)

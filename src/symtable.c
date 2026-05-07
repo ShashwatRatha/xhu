@@ -43,7 +43,7 @@ void symFree(SymTable *t) {
 SymResult symAdd(SymTable *t, const char *name, int val) {
   if (t->count >= SYM_CAPACITY)
     return SYM_ERR_FULL;
-  t->entries[t->count] = (Symbol){.name = strdup(name), .val = val};
+  t->entries[t->count] = (Symbol){ .name = strdup(name), .val = val };
   t->count++;
   return SYM_OK;
 }

@@ -5,6 +5,9 @@
 
 #define STMTS_INIT 8
 
+// <assign_op>  ::= "="  | "+=" | "-=" | "*=" | "/=" | "%="
+//                | "<<=" | ">>="
+
 void parserInit(Parser *p, TokenArr toks, SymTable *sym) {
   p->toks = toks;
   p->sym = sym;
@@ -12,9 +15,35 @@ void parserInit(Parser *p, TokenArr toks, SymTable *sym) {
   p->had_error = 0;
 }
 
-// program ::= stmts
-// stmts ::= stmt stmts | NULL
-ASTNode *parseProgram(Parser *p) {
+// <program>    ::= <stmts>
+// <block>      ::= "{" <stmts> "}"
+
+ASTNode *parseProgram(Parser *p) { return parseStmts(p); }
+
+ASTNode *parseBlock(Parser *p) {
+  if (parserConsume(p).type != LBRACE) {
+    p->had_error = 1;
+    return NULL;
+  }
+
+  ASTNode *block = parseStmts(p);
+  if (!block) {
+    p->had_error = 1;
+    return NULL;
+  }
+
+  if (parserConsume(p).type != RBRACE) {
+    astFree(block);
+    p->had_error = 1;
+    return NULL;
+  }
+
+  return block;
+}
+
+// <stmts>      ::= <stmt> <stmts> | ε
+
+ASTNode *parseStmts(Parser *p) {
   ASTNode **stmts = malloc(STMTS_INIT * sizeof(*stmts));
   if (!stmts)
     return NULL;
@@ -41,20 +70,49 @@ ASTNode *parseProgram(Parser *p) {
     stmts[stmtIdx++] = stmt;
   }
 
-  return astProgram(stmts, stmtIdx);
+  return astStmts(stmts, stmtIdx);
 }
 
-// stmt ::= show | ident assgn expr | expr
+// <stmt>      ::= <func_decl>
+//               | <if_stmt>
+//               | <while_stmt>
+//               | <for_stmt>
+//               | "break"
+//               | "continue"
+//               | "return" [ <expr> ]
+//               | "print"  <expr>
+//               | "show"
+//               | IDENT <assign_op> <expr>
+//               | <expr>
+
 ASTNode *parseStmt(Parser *p) {
   switch (parserPeek(p)) {
   case KEYWORD: {
-    parserConsume(p);
-    return astShow();
+    KeywordType kw = parserConsume(p).kw;
+    switch (kw) {
+    case KW_SHOW:
+      return astShow();
+    case KW_RETURN:
+      return astReturn(parseExpr(p));
+    case KW_BREAK:
+      return astBreak();
+    case KW_CONTINUE:
+      return astContinue();
+    case KW_PRINT:
+      return astPrint(parseExpr(p));
+    case KW_IF:
+      return parseIf(p);
+    case KW_WHILE:
+      return parseWhile(p);
+    case KW_FOR:
+      return parseFor(p);
+    case KW_FN:
+      return parseFunction(p);
+    }
   }
   case IDENT: {
     if (isAssgnOp(parserPeek2(p))) {
-      Token t = parserConsume(p);
-      char *name = t.name;
+      char *name = parserConsume(p).name;
       TokenType op = parserConsume(p).type;
       ASTNode *expr = parseExpr(p);
 
@@ -66,13 +124,103 @@ ASTNode *parseStmt(Parser *p) {
   default: {
     return astExprStmt(parseExpr(p));
   }
-  } // end of switch
+  }
 }
 
-// expr ::= logic_or
+// TODO: implement parseFunction()
+
+// <func_decl>  ::= "func" IDENT "(" <param_list> ")" <block>
+// <param_list> ::= ε
+//                | IDENT { "," IDENT }
+
+ASTNode *parseFunction(Parser *p);
+
+// <if_stmt>    ::= "if"   "(" <expr> ")" <block>
+// [ "else" <block> ]
+
+ASTNode *parseIf(Parser *p) {
+  if (parserConsume(p).type != LPAREN) {
+    p->had_error = 1;
+    return NULL;
+  }
+  ASTNode *condition = parseExpr(p);
+  if (!condition) {
+    p->had_error = 1;
+    return NULL;
+  }
+  if (parserConsume(p).type != RPAREN) {
+    astFree(condition);
+    p->had_error = 1;
+    return NULL;
+  }
+  ASTNode *thenBlock = parseBlock(p);
+  if (!thenBlock) {
+    astFree(condition);
+    p->had_error = 1;
+    return NULL;
+  }
+  ASTNode *elseBlock = NULL;
+
+  Token t = parserCurr(p);
+  if (t.type == KEYWORD && t.kw == KW_ELSE) {
+    parserConsume(p);
+    elseBlock = parseBlock(p);
+    if (!elseBlock) {
+      astFree(condition);
+      astFree(thenBlock);
+      p->had_error = 1;
+      return NULL;
+    }
+  }
+  return astIf(condition, thenBlock, elseBlock);
+}
+
+// <while_stmt> ::= "while" "(" <expr> ")" <block>
+
+ASTNode *parseWhile(Parser *p) {
+  if (parserConsume(p).type != LPAREN) {
+    p->had_error = 1;
+    return NULL;
+  }
+
+  ASTNode *condition = parseExpr(p);
+  if (!condition) {
+    p->had_error = 1;
+    return NULL;
+  }
+
+  if (parserConsume(p).type != RPAREN) {
+    astFree(condition);
+    p->had_error = 1;
+    return NULL;
+  }
+
+  ASTNode *body = parseBlock(p);
+  if (!body) {
+    astFree(condition);
+    p->had_error = 1;
+    return NULL;
+  }
+
+  return astWhile(condition, body);
+}
+
+// TODO: implement parseFor based on grammar below
+
+// <for_stmt>   ::= "for" "(" <for_clause> ";" <expr> ";" <for_clause> ")"
+// <block> <for_clause> ::= ε
+//                | IDENT <assign_op> <expr>
+//                | <expr>
+
+ASTNode *parseFor(Parser *p);
+
+// <expr>       ::= <logic_or>
+
 ASTNode *parseExpr(Parser *p) { return parseLogicOr(p); }
 
-// logic_or ::= logic_and | logic_and '||' logic_or
+// <logic_or>   ::= <logic_and>
+//                | <logic_and> "||" <logic_or>
+
 ASTNode *parseLogicOr(Parser *p) {
   ASTNode *left = parseLogicAnd(p);
   if (parserPeek(p) == OR) {
@@ -83,7 +231,9 @@ ASTNode *parseLogicOr(Parser *p) {
   return left;
 }
 
-// logic_and ::= bit_or | bit_or '&&' logic_and
+// <logic_and>  ::= <bit_or>
+//                | <bit_or> "&&" <logic_and>
+
 ASTNode *parseLogicAnd(Parser *p) {
   ASTNode *left = parseBitOr(p);
   if (parserPeek(p) == AND) {
@@ -94,7 +244,9 @@ ASTNode *parseLogicAnd(Parser *p) {
   return left;
 }
 
-// bit_or ::= bit_xor | bit_xor '|' bit_or
+// <bit_or>     ::= <bit_xor>
+//                | <bit_xor> "|" <bit_or>
+
 ASTNode *parseBitOr(Parser *p) {
   ASTNode *left = parseBitXor(p);
   if (parserPeek(p) == BIT_OR) {
@@ -105,7 +257,9 @@ ASTNode *parseBitOr(Parser *p) {
   return left;
 }
 
-// bit_xor ::= bit_and | bit_and '^' bit_xor
+// <bit_xor>    ::= <bit_and>
+//                | <bit_and> "^" <bit_xor>
+
 ASTNode *parseBitXor(Parser *p) {
   ASTNode *left = parseBitAnd(p);
   if (parserPeek(p) == BIT_XOR) {
@@ -116,7 +270,9 @@ ASTNode *parseBitXor(Parser *p) {
   return left;
 }
 
-// bit_and ::= equality | equality '&' bit_and
+// <bit_and>    ::= <equality>
+//                | <equality> "&" <bit_and>
+
 ASTNode *parseBitAnd(Parser *p) {
   ASTNode *left = parseEquality(p);
   if (parserPeek(p) == BIT_AND) {
@@ -127,7 +283,16 @@ ASTNode *parseBitAnd(Parser *p) {
   return left;
 }
 
-// equality ::= shift | shift '==' equality | shift '!=' equality
+// TODO: rewrite the parseEquality and parseRelational functions
+
+// <equality>   ::= <relational>
+//                | <equality> "==" <relational>
+//                | <equality> "!=" <relational>
+// <relational> ::= <shift>
+//                | <relational> "<"  <shift>
+//                | <relational> "<=" <shift>
+//                | <relational> ">"  <shift>
+//                | <relational> ">=" <shift>
 ASTNode *parseEquality(Parser *p) {
   ASTNode *left = parseShift(p);
   if (parserPeek(p) == EQ || parserPeek(p) == NEQ) {
@@ -138,7 +303,10 @@ ASTNode *parseEquality(Parser *p) {
   return left;
 }
 
-// shift ::= additive | shift '<<' additive | shift '>>' additive
+// <shift>      ::= <additive>
+//                | <shift> "<<" <additive>
+//                | <shift> ">>" <additive>
+
 ASTNode *parseShift(Parser *p) {
   ASTNode *left = parseAdditive(p);
   while (parserPeek(p) == LSHIFT || parserPeek(p) == RSHIFT) {
@@ -150,7 +318,10 @@ ASTNode *parseShift(Parser *p) {
   return left;
 }
 
-// additive ::= term | additive '+' term | additive '-' term
+// <additive>   ::= <term>
+//                | <additive> "+" <term>
+//                | <additive> "-" <term>
+
 ASTNode *parseAdditive(Parser *p) {
   ASTNode *left = parseTerm(p);
   while (parserPeek(p) == PLUS || parserPeek(p) == MINUS) {
@@ -162,7 +333,11 @@ ASTNode *parseAdditive(Parser *p) {
   return left;
 }
 
-// term ::= unary | term '*' unary | term '/' unary | term '%' unary
+// <term>       ::= <unary>
+//                | <term> "*" <unary>
+//                | <term> "/" <unary>
+//                | <term> "%" <unary>
+
 ASTNode *parseTerm(Parser *p) {
   ASTNode *left = parseUnary(p);
   while (parserPeek(p) == MUL || parserPeek(p) == DIV || parserPeek(p) == MOD) {
@@ -174,7 +349,13 @@ ASTNode *parseTerm(Parser *p) {
   return left;
 }
 
-// unary ::= postfix | '-' unary | '!' unary | '++' unary | '--' unary
+// <unary>      ::= <postfix>
+//                | "-"  <unary>
+//                | "!"  <unary>
+//                | "~"  <unary>
+//                | "++" <unary>
+//                | "--" <unary>
+
 ASTNode *parseUnary(Parser *p) {
   TokenType tp = parserPeek(p);
   if (tp == MINUS || tp == NEG || tp == INCR || tp == DECR) {
@@ -196,7 +377,10 @@ ASTNode *parseUnary(Parser *p) {
     return parsePostfix(p);
 }
 
-// postfix ::= primary | primary '++' | primary '--'
+// <postfix>    ::= <primary>
+//                | <primary> "++"
+//                | <primary> "--"
+
 ASTNode *parsePostfix(Parser *p) {
   ASTNode *primary = parsePrimary(p);
   TokenType op = parserPeek(p);
@@ -208,18 +392,31 @@ ASTNode *parsePostfix(Parser *p) {
     return primary;
 }
 
-// primary ::= number | ident | '(' expr ')'
+// TODO: implement grammar below
+
+// <primary>    ::= NUMBER
+//                | IDENT
+//                | IDENT "(" <arg_list> ")"
+//                | "(" <expr> ")"
+// <arg_list>   ::= ε
+//                | <expr> { "," <expr> }
+// NUMBER       ::= DIGIT { DIGIT }
+// IDENT        ::= IDENT_START { IDENT_CHAR }
+// IDENT_START  ::= [a-zA-Z_]
+// IDENT_CHAR   ::= [a-zA-Z0-9_]
+// DIGIT        ::= [0-9]
+// COMMENT      ::= ";" { any char except newline }
+
 ASTNode *parsePrimary(Parser *p) {
   TokenType tp = parserPeek(p);
   if (tp == LPAREN) {
     parserConsume(p);
     ASTNode *expr = parseExpr(p);
-    if (parserPeek(p) == RPAREN) {
-      parserConsume(p);
-      return expr;
+    if (parserConsume(p).type != RPAREN) {
+      p->had_error = 1;
+      return NULL;
     }
-    p->had_error = 1;
-    return NULL;
+    return expr;
   } else if (tp == NUMBER) {
     return astNum(parserConsume(p).val);
   } else if (tp == IDENT) {

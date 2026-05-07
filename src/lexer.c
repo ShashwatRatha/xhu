@@ -42,58 +42,63 @@ static inline int isIdentChar(char c) { return isIdentStart(c) || isDigit(c); }
  * greedily matches longest matching operator
  */
 
-typedef struct {
+typedef struct
+{
   const char *str;
   TokenType type;
 } OpEntry;
 
 static const OpEntry op_table[] = {
-    /* 3-character operators first */
-    {"<<=", LSHIFT_ASSGN},
-    {">>=", RSHIFT_ASSGN},
+  /* 3-character operators first */
+  { "<<=", LSHIFT_ASSGN },
+  { ">>=", RSHIFT_ASSGN },
 
-    /* 2-character operators */
-    {"&&", AND},
-    {"||", OR},
-    {"<<", LSHIFT},
-    {">>", RSHIFT},
-    {"==", EQ},
-    {"!=", NEQ},
-    {"++", INCR},
-    {"--", DECR},
-    {"+=", ADD_ASSGN},
-    {"-=", SUB_ASSGN},
-    {"*=", MUL_ASSGN},
-    {"/=", DIV_ASSGN},
+  /* 2-character operators */
+  { "&&", AND },
+  { "||", OR },
+  { "<<", LSHIFT },
+  { ">>", RSHIFT },
+  { "==", EQ },
+  { "!=", NEQ },
+  { "++", INCR },
+  { "--", DECR },
+  { "+=", ADD_ASSGN },
+  { "-=", SUB_ASSGN },
+  { "*=", MUL_ASSGN },
+  { "%=", MOD_ASSIGN },
+  { "/=", DIV_ASSGN },
 
-    /* 1-character operators */
-    {"+", PLUS},
-    {"-", MINUS},
-    {"*", MUL},
-    {"/", DIV},
-    {"%", MOD},
-    {"&", BIT_AND},
-    {"|", BIT_OR},
-    {"^", BIT_XOR},
-    {"=", ASSGN},
-    {"!", NEG},
-    {"(", LPAREN},
-    {")", RPAREN},
-    {"{", LBRACE},
-    {"}", RBRACE},
-    {"[", LBOX},
-    {"]", RBOX},
-    {NULL, NULL_TYPE} /* sentinel */
+  /* 1-character operators */
+  { "+", PLUS },
+  { "-", MINUS },
+  { "*", MUL },
+  { "/", DIV },
+  { "%", MOD },
+  { "&", BIT_AND },
+  { "|", BIT_OR },
+  { "^", BIT_XOR },
+  { "=", ASSGN },
+  { "!", NEG },
+  { "(", LPAREN },
+  { ")", RPAREN },
+  { "{", LBRACE },
+  { "}", RBRACE },
+  { "[", LBOX },
+  { "]", RBOX },
+  { NULL, NULL_TYPE } /* sentinel */
 };
 
 // keywords
-typedef struct {
+typedef struct
+{
   const char *str;
   KeywordType kw;
 } KwEntry;
 
 static const KwEntry kw_table[] = {
-    {"show", KW_SHOW}, {NULL, 0} /* sentinel */
+  { "show", KW_SHOW },   { "if", KW_IF },   { "func", KW_FN },
+  { "while", KW_WHILE }, { "for", KW_FOR }, { "else", KW_ELSE },
+  { "print", KW_PRINT }, { NULL, 0 } /* sentinel */
 };
 
 /* checkAndAssignKeyword: given a null-terminated string, return 1 and set *out
@@ -120,7 +125,7 @@ TokenArr emitToks(char *str) {
   Token *tokens = malloc((TOK_INIT + 1) * sizeof(*tokens));
   if (!tokens) {
     dprintf(STDERR_FILENO, "lexer: token array alloc failed\n");
-    return (TokenArr){0, NULL};
+    return (TokenArr){ 0, NULL };
   }
   size_t tok_size = TOK_INIT;
   size_t next = 0; // next token to write
@@ -136,7 +141,7 @@ TokenArr emitToks(char *str) {
       Token *tmp = realloc(tokens, (tok_size + 1) * sizeof(*tmp));
       if (!tmp) {
         free(tokens);
-        return (TokenArr){0, NULL};
+        return (TokenArr){ 0, NULL };
       }
       tokens = tmp;
     }
@@ -158,7 +163,7 @@ TokenArr emitToks(char *str) {
         snprintf(msg, sizeof(msg), "unexpected char '%c'", *curr);
         lexError(msg, col);
         free(tokens);
-        return (TokenArr){0, NULL};
+        return (TokenArr){ 0, NULL };
       }
       break;
     }
@@ -184,9 +189,9 @@ TokenArr emitToks(char *str) {
       if (*curr && isIdentChar(*curr)) {
         lexError("invalid number: letter follows digit", col);
         free(tokens);
-        return (TokenArr){0, NULL};
+        return (TokenArr){ 0, NULL };
       }
-      tokens[next++] = (Token){.type = NUMBER, .val = val};
+      tokens[next++] = (Token){ .type = NUMBER, .val = val };
       st = RST;
       break;
     }
@@ -198,7 +203,7 @@ TokenArr emitToks(char *str) {
       char *buf = malloc((buf_size + 1) * sizeof(char));
       if (!buf) {
         free(tokens);
-        return (TokenArr){0, NULL};
+        return (TokenArr){ 0, NULL };
       }
 
       while (*curr && isIdentChar(*curr)) {
@@ -208,7 +213,7 @@ TokenArr emitToks(char *str) {
           if (!tmp) {
             free(buf);
             free(tokens);
-            return (TokenArr){0, NULL};
+            return (TokenArr){ 0, NULL };
           }
           buf = tmp;
         }
@@ -220,9 +225,9 @@ TokenArr emitToks(char *str) {
       KeywordType kw;
       if (checkAndAssignKeyword(buf, &kw)) {
         free(buf); /* keyword needs no string storage */
-        tokens[next++] = (Token){.type = KEYWORD, .kw = kw};
+        tokens[next++] = (Token){ .type = KEYWORD, .kw = kw };
       } else {
-        tokens[next++] = (Token){.type = IDENT, .name = buf};
+        tokens[next++] = (Token){ .type = IDENT, .name = buf };
       }
 
       st = RST;
@@ -232,7 +237,7 @@ TokenArr emitToks(char *str) {
     // OPR: deals with operators, matching greedily to the longest operator
     case OPR: {
       /* Peek up to 3 chars without yet advancing curr */
-      char peek[4] = {0};
+      char peek[4] = { 0 };
       for (int i = 0; i < 3 && curr[i]; i++)
         peek[i] = curr[i];
 
@@ -240,7 +245,7 @@ TokenArr emitToks(char *str) {
       for (int i = 0; op_table[i].str != NULL; i++) {
         size_t len = strlen(op_table[i].str);
         if (strncmp(peek, op_table[i].str, len) == 0) {
-          tokens[next++] = (Token){.type = op_table[i].type, .name = NULL};
+          tokens[next++] = (Token){ .type = op_table[i].type, .name = NULL };
           curr += len;
           col += len;
           matched = 1;
@@ -253,7 +258,7 @@ TokenArr emitToks(char *str) {
         snprintf(msg, sizeof(msg), "unknown operator '%c'", *curr);
         lexError(msg, col);
         free(tokens);
-        return (TokenArr){0, NULL};
+        return (TokenArr){ 0, NULL };
       }
       st = RST;
       break;
@@ -266,13 +271,13 @@ TokenArr emitToks(char *str) {
     Token *tmp = realloc(tokens, (next + 2) * sizeof(*tmp));
     if (!tmp) {
       free(tokens);
-      return (TokenArr){0, NULL};
+      return (TokenArr){ 0, NULL };
     }
     tokens = tmp;
   }
-  tokens[next++] = (Token){.type = NULL_TYPE, .name = NULL};
+  tokens[next++] = (Token){ .type = NULL_TYPE, .name = NULL };
 
-  return (TokenArr){.count = next, .tokens = tokens};
+  return (TokenArr){ .count = next, .tokens = tokens };
 }
 
 // only IDENT tokens' names need to be freed as they are allocated on the heap

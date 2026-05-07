@@ -20,25 +20,64 @@ typedef enum {
   NODE_SHOW,      /* 'show' keyword           — no payload          */
   NODE_EXPR_STMT, /* bare expression stmt     — .left               */
   NODE_PROGRAM,   /* root node                — .stmts, .stmt_count */
+  NODE_RETURN,
+  NODE_BREAK,
+  NODE_CONTINUE,
+  NODE_IF,
+  NODE_ELSE,
+  NODE_FOR,
+  NODE_WHILE,
+  NODE_PRINT,
   NODE_NULL
 } NodeType;
 
-/* Single node used for every node type.  Unused fields are NULL/0. */
-typedef struct ASTNode {
+typedef struct ASTNode
+{
   NodeType type;
-  int ival;     /* NODE_NUM: the value                     */
-  char *name;   /* NODE_VAR, NODE_ASSIGN: variable name    */
-  TokenType op; /* NODE_BINOP, NODE_UNARY, NODE_ASSIGN     */
-  struct ASTNode *left;
-  struct ASTNode *right;
-  struct ASTNode **stmts; /* NODE_PROGRAM: statement array     */
-  size_t stmt_count;      /* NODE_PROGRAM: length of stmts[]   */
+  union {
+    int val;
+    char *name;
+    struct
+    {
+      struct ASTNode **stmts;
+      size_t stmtCount;
+    } block;
+    struct
+    {
+      struct ASTNode *condition;
+      struct ASTNode *thenBlock;
+      struct ASTNode *elseBlock;
+    } ifNode;
+    struct
+    {
+      struct ASTNode *condition;
+      struct ASTNode *body;
+    } whileNode;
+    struct
+    {
+      TokenType op;
+      struct ASTNode *operand;
+    } standaloneNode;
+    struct
+    {
+      TokenType op;
+      char *name;
+      struct ASTNode *rvalue;
+    } assgnNode;
+    struct
+    {
+      struct ASTNode *left;
+      struct ASTNode *right;
+      TokenType op;
+    } binOp;
+  };
 } ASTNode;
 
 /* ── Parser state ──────────────────────────────────────────────────────── */
 
 /* Passed by pointer to every parse function. */
-typedef struct {
+typedef struct
+{
   TokenArr toks;
   size_t pos;
   SymTable *sym;
@@ -93,7 +132,14 @@ ASTNode *astPostDecr(ASTNode *operand);
 ASTNode *astAssgn(TokenType op, const char *name, ASTNode *right);
 ASTNode *astShow(void);
 ASTNode *astExprStmt(ASTNode *expr);
-ASTNode *astProgram(ASTNode **stmts, size_t count);
+ASTNode *astStmts(ASTNode **stmts, size_t count);
+ASTNode *astBreak();
+ASTNode *astReturn(ASTNode *expr);
+ASTNode *astContinue();
+ASTNode *astIf(ASTNode *condition, ASTNode *thenBlock, ASTNode *elseBlock);
+ASTNode *astElse(ASTNode *elseBlock);
+ASTNode *astWhile(ASTNode *condition, ASTNode *body);
+ASTNode *astPrint(ASTNode *expression);
 void astFree(ASTNode *node);
 
 /* ── Parse functions (defined in parser.c)
@@ -104,8 +150,13 @@ void parserInit(Parser *p, TokenArr toks, SymTable *sym);
 
 /* Entry point — call for each complete input. */
 ASTNode *parseProgram(Parser *p);
-
+ASTNode *parseBlock(Parser *p);
+ASTNode *parseStmts(Parser *p);
 ASTNode *parseStmt(Parser *p);
+ASTNode *parseIf(Parser *p);
+ASTNode *parseWhile(Parser *p);
+ASTNode *parseFor(Parser *p);
+ASTNode *parseFunction(Parser *p);
 ASTNode *parseExpr(Parser *p);
 ASTNode *parseLogicOr(Parser *p);
 ASTNode *parseLogicAnd(Parser *p);

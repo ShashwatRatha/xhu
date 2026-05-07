@@ -6,16 +6,7 @@
 
 // default constructor for AST node
 static ASTNode *astInit(void) {
-  ASTNode *node = malloc(sizeof(ASTNode));
-
-  node->type = NODE_NULL;
-  node->ival = 0;
-  node->left = node->right = NULL;
-  node->name = NULL;
-  node->stmts = NULL;
-  node->stmt_count = 0;
-  node->op = NULL_TYPE;
-
+  ASTNode *node = calloc(1, sizeof(ASTNode));
   return node;
 }
 
@@ -23,8 +14,7 @@ static ASTNode *astInit(void) {
 ASTNode *astNum(int val) {
   ASTNode *node = astInit();
 
-  node->type = NODE_NUM;
-  node->ival = val;
+  *node = (ASTNode){ .type = NODE_NUM, .val = val };
 
   return node;
 }
@@ -33,8 +23,7 @@ ASTNode *astNum(int val) {
 ASTNode *astVar(const char *name) {
   ASTNode *node = astInit();
 
-  node->type = NODE_VAR;
-  node->name = strdup(name);
+  *node = (ASTNode){ .type = NODE_VAR, .name = strdup(name) };
 
   return node;
 }
@@ -43,10 +32,8 @@ ASTNode *astVar(const char *name) {
 ASTNode *astBinOp(TokenType tp, ASTNode *left, ASTNode *right) {
   ASTNode *node = astInit();
 
-  node->type = NODE_BINOP;
-  node->op = tp;
-  node->left = left;
-  node->right = right;
+  *node = (ASTNode){ .type = NODE_BINOP,
+                     .binOp = { .op = tp, .left = left, .right = right } };
 
   return node;
 }
@@ -55,9 +42,8 @@ ASTNode *astBinOp(TokenType tp, ASTNode *left, ASTNode *right) {
 ASTNode *astUnary(TokenType op, ASTNode *operand) {
   ASTNode *node = astInit();
 
-  node->type = NODE_UNARY;
-  node->op = op;
-  node->left = operand;
+  *node = (ASTNode){ .type = NODE_UNARY,
+                     .standaloneNode = { .op = op, .operand = operand } };
 
   return node;
 }
@@ -66,8 +52,8 @@ ASTNode *astUnary(TokenType op, ASTNode *operand) {
 ASTNode *astPreIncr(ASTNode *operand) {
   ASTNode *node = astInit();
 
-  node->type = NODE_PRE_INC;
-  node->left = operand;
+  *node = (ASTNode){ .type = NODE_PRE_INC,
+                     .standaloneNode = { .operand = operand } };
 
   return node;
 }
@@ -76,8 +62,8 @@ ASTNode *astPreIncr(ASTNode *operand) {
 ASTNode *astPreDecr(ASTNode *operand) {
   ASTNode *node = astInit();
 
-  node->type = NODE_PRE_DEC;
-  node->left = operand;
+  *node = (ASTNode){ .type = NODE_PRE_DEC,
+                     .standaloneNode = { .operand = operand } };
 
   return node;
 }
@@ -86,8 +72,8 @@ ASTNode *astPreDecr(ASTNode *operand) {
 ASTNode *astPostIncr(ASTNode *operand) {
   ASTNode *node = astInit();
 
-  node->type = NODE_POST_INC;
-  node->left = operand;
+  *node = (ASTNode){ .type = NODE_POST_INC,
+                     .standaloneNode = { .operand = operand } };
 
   return node;
 }
@@ -96,8 +82,8 @@ ASTNode *astPostIncr(ASTNode *operand) {
 ASTNode *astPostDecr(ASTNode *operand) {
   ASTNode *node = astInit();
 
-  node->type = NODE_POST_DEC;
-  node->left = operand;
+  *node = (ASTNode){ .type = NODE_POST_DEC,
+                     .standaloneNode = { .operand = operand } };
 
   return node;
 }
@@ -106,10 +92,9 @@ ASTNode *astPostDecr(ASTNode *operand) {
 ASTNode *astAssgn(TokenType op, const char *name, ASTNode *operand) {
   ASTNode *node = astInit();
 
-  node->type = NODE_ASSIGN;
-  node->name = strdup(name);
-  node->op = op;
-  node->right = operand;
+  *node = (ASTNode){ .type = NODE_ASSIGN,
+                     .assgnNode = {
+                         .op = op, .name = strdup(name), .rvalue = operand } };
 
   return node;
 }
@@ -118,7 +103,7 @@ ASTNode *astAssgn(TokenType op, const char *name, ASTNode *operand) {
 ASTNode *astShow(void) {
   ASTNode *node = astInit();
 
-  node->type = NODE_SHOW;
+  *node = (ASTNode){ .type = NODE_SHOW };
 
   return node;
 }
@@ -127,40 +112,136 @@ ASTNode *astShow(void) {
 ASTNode *astExprStmt(ASTNode *expr) {
   ASTNode *node = astInit();
 
-  node->type = NODE_EXPR_STMT;
-  node->left = expr;
+  *node = (ASTNode){ .type = NODE_EXPR_STMT,
+                     .standaloneNode = { .operand = expr } };
 
   return node;
 }
 
 // complete program node
-ASTNode *astProgram(ASTNode **stmts, size_t count) {
+ASTNode *astStmts(ASTNode **stmts, size_t count) {
   ASTNode *node = astInit();
 
-  node->type = NODE_PROGRAM;
-  node->stmts = stmts;
-  node->stmt_count = count;
+  *node = (ASTNode){ .type = NODE_PROGRAM,
+                     .block = { .stmts = stmts, .stmtCount = count } };
 
   return node;
 }
 
-// free helper
+ASTNode *astReturn(ASTNode *expr) {
+  ASTNode *node = astInit();
+
+  *node =
+      (ASTNode){ .type = NODE_RETURN, .standaloneNode = { .operand = expr } };
+
+  return node;
+}
+
+ASTNode *astBreak() {
+  ASTNode *node = astInit();
+
+  *node = (ASTNode){ .type = NODE_BREAK };
+
+  return node;
+}
+
+ASTNode *astContinue() {
+  ASTNode *node = astInit();
+
+  *node = (ASTNode){ .type = NODE_CONTINUE };
+
+  return node;
+}
+
+ASTNode *astIf(ASTNode *condition, ASTNode *thenBlock, ASTNode *elseBlock) {
+  ASTNode *node = astInit();
+
+  *node = (ASTNode){ .type = NODE_IF,
+                     .ifNode = { .condition = condition,
+                                 .thenBlock = thenBlock,
+                                 .elseBlock = elseBlock } };
+
+  return node;
+}
+
+ASTNode *astElse(ASTNode *elseBlock) {
+  ASTNode *node = astInit();
+
+  *node = (ASTNode){ .type = NODE_ELSE,
+                     .standaloneNode = { .operand = elseBlock } };
+
+  return node;
+}
+
+ASTNode *astPrint(ASTNode *expression) {
+  ASTNode *node = astInit();
+
+  *node = (ASTNode){ .type = NODE_PRINT,
+                     .standaloneNode = { .operand = expression } };
+
+  return node;
+}
+
+/*
+ASTNode* astFor(ASTNode* init, ASTNode* cond, ASTNode* update) {
+  ASTNode* node = astInit();
+
+  node->type = NODE_FOR;
+  // for i:[0,121] {}
+  // "for" IDENT ":" "[" <start> "," <end> "]" <block>
+}*/
+
+ASTNode *astWhile(ASTNode *condition, ASTNode *body) {
+  ASTNode *node = astInit();
+
+  *node = (ASTNode){ .type = NODE_WHILE,
+                     .whileNode = { .condition = condition, .body = body } };
+
+  return node;
+}
+
 void astFree(ASTNode *node) {
   if (!node)
     return;
 
-  if (node->name)
+  switch (node->type) {
+  case NODE_VAR:
     free(node->name);
-
-  if (node->stmts) {
-    for (size_t i = 0; i < node->stmt_count; i++) {
-      astFree(node->stmts[i]);
+    break;
+  case NODE_IF:
+    astFree(node->ifNode.condition);
+    astFree(node->ifNode.thenBlock);
+    astFree(node->ifNode.elseBlock);
+    break;
+  case NODE_WHILE:
+    astFree(node->whileNode.condition);
+    astFree(node->whileNode.body);
+    break;
+  case NODE_BINOP:
+    astFree(node->binOp.left);
+    astFree(node->binOp.right);
+    break;
+  case NODE_ASSIGN:
+    free(node->assgnNode.name);
+    astFree(node->assgnNode.rvalue);
+    break;
+  case NODE_PROGRAM:
+    for (size_t i = 0; i < node->block.stmtCount; i++) {
+      astFree(node->block.stmts[i]);
     }
-    free(node->stmts);
+    free(node->block.stmts);
+    break;
+  case NODE_EXPR_STMT:
+  case NODE_UNARY:
+  case NODE_PRE_INC:
+  case NODE_PRE_DEC:
+  case NODE_POST_INC:
+  case NODE_POST_DEC:
+    astFree(node->standaloneNode.operand);
+    break;
+  default:
+    break;
   }
-
-  astFree(node->left);
-  astFree(node->right);
 
   free(node);
 }

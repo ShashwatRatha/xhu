@@ -25,6 +25,7 @@ typedef enum {
   ADD_ASSGN,
   SUB_ASSGN,
   MUL_ASSGN,
+  MOD_ASSIGN,
   DIV_ASSGN, // op-assign
   LSHIFT_ASSGN,
   RSHIFT_ASSGN,
@@ -34,6 +35,8 @@ typedef enum {
   RBRACE,
   LBOX,
   RBOX, // brackets
+  SEMICOLON,
+  COLON,
   NUMBER,
   IDENT,
   KEYWORD,
@@ -42,7 +45,16 @@ typedef enum {
 
 /* Keywords recognised by the lexer. */
 typedef enum {
-  KW_SHOW /* "show" — print all variable bindings */
+  KW_SHOW, /* "show" — print all variable bindings */
+  KW_IF,
+  KW_ELSE,
+  KW_WHILE,
+  KW_FOR,
+  KW_FN,
+  KW_PRINT,
+  KW_BREAK,
+  KW_CONTINUE,
+  KW_RETURN
 } KeywordType;
 
 /* A single token.  Only one union member is valid depending on type:
@@ -51,7 +63,8 @@ typedef enum {
  *   KEYWORD → .kw
  *   others  → no payload (name is NULL)
  */
-typedef struct {
+typedef struct
+{
   TokenType type;
   union {
     int val;
@@ -61,7 +74,8 @@ typedef struct {
 } Token;
 
 /* Array returned by emitToks, including the NULL_TYPE sentinel. */
-typedef struct {
+typedef struct
+{
   size_t count;
   Token *tokens;
 } TokenArr;
