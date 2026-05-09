@@ -3,8 +3,7 @@
 
 #include <stddef.h>
 
-/* Maximum number of variables per session. */
-#define SYM_CAPACITY 64
+#define SYM_INIT 32
 
 /* Return codes for sym* operations. */
 typedef enum {
@@ -23,14 +22,16 @@ typedef struct
 } Symbol;
 
 /* Flat array symbol table — linear scan, sufficient for interactive use. */
-typedef struct
+typedef struct SymTable
 {
-  Symbol entries[SYM_CAPACITY];
-  int count;
+  Symbol *entries;
+  struct SymTable *parent;
+  size_t count;
+  size_t capacity;
 } SymTable;
 
 /* Zero-initialise a SymTable before first use. */
-void symInit(SymTable *t);
+SymTable *symInit(SymTable *parent);
 
 /* Create or overwrite a binding.
  * op == ASSGN  — create if absent, overwrite if present.

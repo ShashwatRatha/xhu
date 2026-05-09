@@ -26,7 +26,8 @@ static inline int isWhite(char c) {
 static inline int isOpStart(char c) {
   return c == '+' || c == '-' || c == '*' || c == '/' || c == '%' || c == '&' ||
          c == '|' || c == '^' || c == '<' || c == '>' || c == '=' || c == '!' ||
-         c == '(' || c == ')' || c == '{' || c == '}' || c == '[' || c == ']';
+         c == '(' || c == ')' || c == '{' || c == '}' || c == '[' || c == ']' ||
+         c == ',' || c == ';' || c == '~' || c == ':';
 }
 
 // helper func for digit chars
@@ -104,9 +105,17 @@ typedef struct
 } KwEntry;
 
 static const KwEntry kw_table[] = {
-  { "show", KW_SHOW },   { "if", KW_IF },   { "func", KW_FN },
-  { "while", KW_WHILE }, { "for", KW_FOR }, { "else", KW_ELSE },
-  { "print", KW_PRINT }, { NULL, 0 } /* sentinel */
+  { "show", KW_SHOW },
+  { "if", KW_IF },
+  { "func", KW_FN },
+  { "while", KW_WHILE },
+  { "for", KW_FOR },
+  { "else", KW_ELSE },
+  { "print", KW_PRINT },
+  { "break", KW_BREAK },
+  { "continue", KW_CONTINUE },
+  { "return", KW_RETURN },
+  { NULL, 0 } /* sentinel */
 };
 
 /* checkAndAssignKeyword: given a null-terminated string, return 1 and set *out

@@ -1,13 +1,39 @@
 #ifndef EVAL_H_
 #define EVAL_H_
 
-#include "parser.h"
-#include "symtable.h"
+struct ASTNode;
+typedef struct ASTNode ASTNode;
 
-/* evalAST — walk the AST rooted at node and return its integer value.
- * NODE_EXPR_STMT nodes print their result to stdout automatically.
- * The caller owns the tree and must call astFree() after evaluation.
- */
-int evalAST(ASTNode *node, SymTable *table);
+struct SymTable;
+typedef struct SymTable SymTable;
 
-#endif /* EVAL_H_ */
+typedef enum { SUC, ERR, VAL, BRK, CNT, RET } Status;
+
+typedef struct
+{
+  Status status;
+  union {
+    unsigned char errCode;
+    unsigned char sucCode;
+    int returnVal;
+  };
+} Result;
+
+static inline Result success(unsigned char sCode) {
+  return (Result){ .status = SUC, .sucCode = sCode };
+}
+static inline Result failure(unsigned char eCode) {
+  return (Result){ .status = ERR, .errCode = eCode };
+}
+static inline Result value(int value) {
+  return (Result){ .status = VAL, .returnVal = value };
+}
+static inline Result brek() { return (Result){ .status = BRK }; }
+static inline Result cnt() { return (Result){ .status = CNT }; }
+static inline Result ret(int value) {
+  return (Result){ .status = RET, .returnVal = value };
+}
+
+Result evalAST(ASTNode *node, SymTable *table);
+
+#endif

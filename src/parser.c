@@ -18,7 +18,7 @@ void parserInit(Parser *p, TokenArr toks, SymTable *sym) {
 // <program>    ::= <stmts>
 // <block>      ::= "{" <stmts> "}"
 
-ASTNode *parseProgram(Parser *p) { return parseStmts(p); }
+ASTNode *parseProgram(Parser *p) { return astProgram(parseStmts(p)); }
 
 ASTNode *parseBlock(Parser *p) {
   if (parserConsume(p).type != LBRACE) {
@@ -38,7 +38,7 @@ ASTNode *parseBlock(Parser *p) {
     return NULL;
   }
 
-  return block;
+  return astBlock(block);
 }
 
 // <stmts>      ::= <stmt> <stmts> | ε
@@ -50,7 +50,9 @@ ASTNode *parseStmts(Parser *p) {
 
   size_t stmtIdx = 0, stmtCap = STMTS_INIT;
 
-  while (parserPeek(p) != NULL_TYPE) {
+  while (parserPeek(p) != NULL_TYPE && parserPeek(p) != RBRACE) {
+    if (p->had_error)
+      break;
     ASTNode *stmt = parseStmt(p);
     if (!stmt)
       break;
@@ -109,8 +111,10 @@ ASTNode *parseStmt(Parser *p) {
     case KW_FN:
       return parseFunction(p);
     default:
-      break;
+      p->had_error = 1;
+      return NULL;
     }
+    break;
   }
   case IDENT: {
     if (isAssgnOp(parserPeek2(p))) {
@@ -192,7 +196,7 @@ ASTNode *parseParams(Parser *p) {
       paramCap <<= 1;
       ASTNode **tmp = realloc(params, paramCap * sizeof(*params));
       if (!tmp) {
-        for (size_t i = 0; i < paramCap; i++) {
+        for (size_t i = 0; i < paramIdx; i++) {
           astFree(params[i]);
         }
         free(params);
@@ -519,8 +523,7 @@ ASTNode *parseUnary(Parser *p) {
     TokenType op = parserConsume(p).type;
 
     ASTNode *operand = parseUnary(p);
-
-    if ((op == INCR || op == DECR) && (operand->type != NODE_VAR)) {
+    if (!operand || ((op == INCR || op == DECR) && operand->type != nodeVar)) {
       astFree(operand);
       p->had_error = 1;
       return NULL;
@@ -529,7 +532,8 @@ ASTNode *parseUnary(Parser *p) {
     if (op == MINUS || op == NEG)
       return astUnary(op, operand);
     else
-      return (op == INCR) ? astPreIncr(operand) : astPreDecr(operand);
+      return (op == INCR) ? astPreIncr(operand->name)
+                          : astPreDecr(operand->name);
   } else
     return parsePostfix(p);
 }
@@ -543,8 +547,14 @@ ASTNode *parsePostfix(Parser *p) {
   TokenType op = parserPeek(p);
 
   if (op == INCR || op == DECR) {
+    if (!primary || primary->type != nodeVar) {
+      astFree(primary);
+      p->had_error = 1;
+      return NULL;
+    }
     parserConsume(p);
-    return (op == INCR) ? astPostIncr(primary) : astPostDecr(primary);
+    return (op == INCR) ? astPostIncr(primary->name)
+                        : astPostDecr(primary->name);
   } else
     return primary;
 }

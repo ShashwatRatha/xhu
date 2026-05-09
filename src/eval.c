@@ -6,184 +6,266 @@
 #include <stdio.h>
 #include <unistd.h>
 
-/* ===Some Implementation Details===
- *
- * astFree is not called in evalAST for each node as there are parent owns
- * children, so could result in double frees. Caller frees the AST nodes after
- * evaluation. 0 is usd as an error-sentinel, but needs to be fixed somehow this
- * causes some bugs (such as x = y with undefined y will set x = 0.) (maybe by
- * changing the return type) Assignment nodes are dealt with separately from
- * other binary operation nodes, as trigger manipulation of the symbol table
- * itself Increment and Decrement is handled separately from other assignment
- * operations, as they are unary operations
- */
+typedef enum : unsigned char {
+  eNullNode,
+  eDivByZero,
+  eUnknownOpr,
+  eUnknownNodeType,
+  eUndefVar
+} ErrCodes;
 
-int evalAST(ASTNode *node, SymTable *table) {
-  if (!node)
-    return 0;
+typedef enum : unsigned char { sProgExecution } SuccessCodes;
+
+Result evalAST(ASTNode *node, SymTable *table) {
+  if (!node) {
+    return failure(eNullNode);
+  }
 
   switch (node->type) {
+  case nodeBreak:
+    return brek();
+  case nodeContinue:
+    return cnt();
+  case nodeReturn: {
+    Result retVal = evalAST(node->standaloneNode.operand, table);
+    if (retVal.status == ERR)
+      return retVal;
 
-  case NODE_SHOW: {
-    symShow(table);
-    return 0;
+    if (retVal.status == VAL)
+      return ret(retVal.returnVal);
+    return ret(0);
   }
+  case nodeFor: {
+    SymTable *inTable = symInit(table);
+    Result init = evalAST(node->forNode.init, inTable);
+    if (init.status == ERR)
+      return init;
 
-  case NODE_NUM: {
-    return node->ival;
+    for (;;) {
+      Result cond = evalAST(node->forNode.cond, inTable);
+      if (cond.status == ERR) {
+        symFree(inTable);
+        return cond;
+      }
+      if (cond.returnVal == 0)
+        break;
+
+      Result body = evalAST(node->forNode.body, inTable);
+      if (body.status == ERR || body.status == RET) {
+        symFree(inTable);
+        return body;
+      }
+      if (body.status == BRK)
+        break;
+
+      Result update = evalAST(node->forNode.update, inTable);
+      if (update.status == ERR) {
+        symFree(inTable);
+        return update;
+      }
+    }
+
+    symFree(inTable);
+    return success(sProgExecution);
   }
+  case nodeWhile: {
+    SymTable *inTable = symInit(table);
+    while (1) {
+      Result condition = evalAST(node->whileNode.condition, inTable);
+      if (condition.status == ERR) {
+        symFree(inTable);
+        return condition;
+      }
+      if (condition.returnVal == 0)
+        break;
 
-  case NODE_VAR: {
+      Result body = evalAST(node->whileNode.body, inTable);
+      if (body.status == ERR || body.status == RET) {
+        symFree(inTable);
+        return body;
+      }
+      if (body.status == BRK)
+        break;
+    }
+
+    symFree(inTable);
+    return success(sProgExecution);
+  }
+    // case nodeFn:
+    // case nodeFnCall:
+    //                 break;
+  case nodeProgram:
+    return evalAST(node->standaloneNode.operand, table);
+  case nodeBlock: {
+    SymTable *inTable = symInit(table);
+    Result res = evalAST(node->standaloneNode.operand, inTable);
+    symFree(inTable);
+    return res;
+  }
+  case nodeVar: {
     int val = 0;
     if (symGet(table, node->name, &val) != SYM_OK)
-      dprintf(STDERR_FILENO, "error: undefined variable '%s'\n", node->name);
-    return val;
+      return failure(eUndefVar);
+    return value(val);
   }
+  case nodeNum:
+    return value(node->val);
+  case nodeShow:
+    // symShow(table);
+    return success(sProgExecution);
+  case nodePrint: {
+    Result exprVal = evalAST(node->standaloneNode.operand, table);
+    if (exprVal.status != VAL)
+      return exprVal;
 
-  case NODE_BINOP: {
-    int left = evalAST(node->left, table);
-    int right = evalAST(node->right, table);
-    switch (node->op) {
-    case PLUS:
-      return left + right;
-    case MINUS:
-      return left - right;
-    case MUL:
-      return left * right;
-    case DIV:
-      if (right == 0) {
-        dprintf(STDERR_FILENO, "error: division by zero\n");
-        return 0;
-      }
-      return left / right;
-    case MOD:
-      if (right == 0) {
-        dprintf(STDERR_FILENO, "error: modulo by zero\n");
-        return 0;
-      }
-      return left % right;
-    case AND:
-      return left && right;
-    case OR:
-      return left || right;
-    case BIT_AND:
-      return left & right;
-    case BIT_OR:
-      return left | right;
-    case BIT_XOR:
-      return left ^ right;
-    case LSHIFT:
-      return left << right;
-    case RSHIFT:
-      return left >> right;
-    case EQ:
-      return left == right;
-    case NEQ:
-      return left != right;
-    default:
-      return 0;
+    printf("%d\n", exprVal.returnVal);
+    return success(sProgExecution);
+  }
+  case nodeExprStmt:
+    return evalAST(node->standaloneNode.operand, table);
+  case nodeStmts:
+    for (size_t i = 0; i < node->block.stmtCount; i++) {
+      Result res = evalAST(node->block.stmts[i], table);
+      if (res.status != VAL && res.status != SUC)
+        return res;
     }
-  }
+    return success(sProgExecution);
+  case nodeIf: {
+    Result condition = evalAST(node->ifNode.condition, table);
+    if (condition.status == ERR)
+      return condition;
+    if (condition.status != VAL)
+      return failure(eUnknownNodeType);
+    if (condition.returnVal != 0)
+      return evalAST(node->ifNode.thenBlock, table);
+    else if (node->ifNode.elseBlock)
+      return evalAST(node->ifNode.elseBlock, table);
 
-  case NODE_UNARY: {
-    int val = evalAST(node->left, table);
-    switch (node->op) {
-    case MINUS:
-      return -val;
-    case NEG:
-      return !val;
-    default:
-      return 0;
-    }
+    return success(sProgExecution);
   }
-
-  case NODE_PRE_INC: {
-    // ++x: increment then return new value
-    const char *name = node->left->name;
+  case nodePreInc: {
+    const char *name = node->name;
     int val = 0;
-    if (symGet(table, name, &val) != SYM_OK) {
-      dprintf(STDERR_FILENO, "error: undefined variable '%s'\n", name);
-      return 0;
-    }
+    if (symGet(table, name, &val) != SYM_OK)
+      return failure(eUndefVar);
     symSet(table, name, val + 1, ASSGN);
-    return val + 1;
+    return value(val + 1);
   }
-
-  case NODE_PRE_DEC: {
-    // --x: decrement then return new value
-    const char *name = node->left->name;
+  case nodePreDec: {
+    const char *name = node->name;
     int val = 0;
-    if (symGet(table, name, &val) != SYM_OK) {
-      dprintf(STDERR_FILENO, "error: undefined variable '%s'\n", name);
-      return 0;
-    }
+    if (symGet(table, name, &val) != SYM_OK)
+      return failure(eUndefVar);
     symSet(table, name, val - 1, ASSGN);
-    return val - 1;
+    return value(val - 1);
   }
-
-  case NODE_POST_INC: {
-    // x++: return old value then increment
-    const char *name = node->left->name;
+  case nodePostInc: {
+    const char *name = node->name;
     int val = 0;
-    if (symGet(table, name, &val) != SYM_OK) {
-      dprintf(STDERR_FILENO, "error: undefined variable '%s'\n", name);
-      return 0;
-    }
+    if (symGet(table, name, &val) != SYM_OK)
+      return failure(eUndefVar);
     symSet(table, name, val + 1, ASSGN);
-    return val;
+    return value(val);
   }
-
-  case NODE_POST_DEC: {
-    // x--: return old value then decrement
-    const char *name = node->left->name;
+  case nodePostDec: {
+    const char *name = node->name;
     int val = 0;
-    if (symGet(table, name, &val) != SYM_OK) {
-      dprintf(STDERR_FILENO, "error: undefined variable '%s'\n", name);
-      return 0;
-    }
+    if (symGet(table, name, &val) != SYM_OK)
+      return failure(eUndefVar);
     symSet(table, name, val - 1, ASSGN);
-    return val;
+    return value(val);
   }
+  case nodeAssign: {
+    Result rval = evalAST(node->assgnNode.rvalue, table);
+    if (rval.status == ERR)
+      return rval;
 
-  case NODE_ASSIGN: {
-    int rval = evalAST(node->right, table);
-    SymResult res = symSet(table, node->name, rval, node->op);
-    if (res == SYM_ERR_UNDEF) {
-      dprintf(STDERR_FILENO,
-              "error: '%s' undefined (use '=' for first assignment)\n",
-              node->name);
-      return 0;
-    }
-    if (res == SYM_ERR_FULL) {
-      dprintf(STDERR_FILENO, "error: symbol table full\n");
-      return 0;
-    }
-    if (res == SYM_DIVZERO) {
-      dprintf(STDERR_FILENO, "error: division by zero\n");
-      return 0;
-    }
+    SymResult res =
+        symSet(table, node->assgnNode.name, rval.returnVal, node->assgnNode.op);
+
+    if (res == SYM_ERR_UNDEF)
+      return failure(eUndefVar);
+    else if (res == SYM_DIVZERO)
+      return failure(eDivByZero);
+    else
+      return value(rval.returnVal);
     // return the value that was actually stored
-    // to presserve semantic meaning
-    int newval = 0;
-    symGet(table, node->name, &newval);
-    return newval;
+    // to preserve semantic meaning
+    // int newval = 0;
+    // symGet(table, node->name, &newval);
+    // return newval;
   }
+  case nodeBinOp: {
+    Result left = evalAST(node->binOp.left, table);
+    if (left.status == ERR)
+      return left;
 
-  case NODE_EXPR_STMT: {
-    // bare expression: evaluate and print result
-    int val = evalAST(node->left, table);
-    printf("%d\n", val);
-    return val;
+    Result right = evalAST(node->binOp.right, table);
+    if (right.status == ERR)
+      return right;
+
+    switch (node->binOp.op) {
+    case PLUS:
+      return value(left.returnVal + right.returnVal);
+    case MINUS:
+      return value(left.returnVal - right.returnVal);
+    case MUL:
+      return value(left.returnVal * right.returnVal);
+    case DIV:
+      if (right.returnVal == 0)
+        return failure(eDivByZero);
+      return value(left.returnVal / right.returnVal);
+    case MOD:
+      if (right.returnVal == 0)
+        return failure(eDivByZero);
+      return value(left.returnVal % right.returnVal);
+    case AND:
+      return value(left.returnVal && right.returnVal);
+    case OR:
+      return value(left.returnVal || right.returnVal);
+    case BIT_AND:
+      return value(left.returnVal & right.returnVal);
+    case BIT_OR:
+      return value(left.returnVal | right.returnVal);
+    case BIT_XOR:
+      return value(left.returnVal ^ right.returnVal);
+    case LSHIFT:
+      return value(left.returnVal << right.returnVal);
+    case RSHIFT:
+      return value(left.returnVal >> right.returnVal);
+    case EQ:
+      return value(left.returnVal == right.returnVal);
+    case NEQ:
+      return value(left.returnVal != right.returnVal);
+    case LT:
+      return value(left.returnVal < right.returnVal);
+    case LET:
+      return value(left.returnVal <= right.returnVal);
+    case GT:
+      return value(left.returnVal > right.returnVal);
+    case GET:
+      return value(left.returnVal >= right.returnVal);
+    default:
+      return failure(eUnknownOpr);
+    }
   }
+  case nodeUnary: {
+    Result opr = evalAST(node->standaloneNode.operand, table);
+    if (opr.status == ERR)
+      return opr;
 
-  case NODE_PROGRAM: {
-    int val = 0;
-    for (size_t i = 0; i < node->stmt_count; i++)
-      val = evalAST(node->stmts[i], table);
-    return val;
+    switch (node->standaloneNode.op) {
+    case NOT:
+      return value(!opr.returnVal);
+    case BIT_NOT:
+      return value(~opr.returnVal);
+    case MINUS:
+      return value(-opr.returnVal);
+    default:
+      return failure(eUnknownOpr);
+    }
   }
-
   default:
-    return 0;
+    return failure(eUnknownNodeType);
   }
 }

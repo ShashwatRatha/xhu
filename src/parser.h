@@ -8,29 +8,30 @@
 /* ── AST node types ────────────────────────────────────────────────────── */
 
 typedef enum {
-  NODE_NUM,       /* integer literal          — .ival               */
-  NODE_VAR,       /* variable reference       — .name               */
-  NODE_BINOP,     /* binary operation         — .op, .left, .right  */
-  NODE_UNARY,     /* unary prefix (-, !)      — .op, .left          */
-  NODE_PRE_INC,   /* prefix  ++x              — .left (must be VAR) */
-  NODE_PRE_DEC,   /* prefix  --x              — .left (must be VAR) */
-  NODE_POST_INC,  /* postfix x++              — .left (must be VAR) */
-  NODE_POST_DEC,  /* postfix x--              — .left (must be VAR) */
-  NODE_ASSIGN,    /* assignment stmt          — .op, .name, .right  */
-  NODE_SHOW,      /* 'show' keyword           — no payload          */
-  NODE_EXPR_STMT, /* bare expression stmt     — .left               */
-  NODE_PROGRAM,   /* root node                — .stmts, .stmt_count */
-  NODE_RETURN,
-  NODE_BREAK,
-  NODE_CONTINUE,
-  NODE_IF,
-  NODE_ELSE,
-  NODE_FOR,
-  NODE_WHILE,
-  NODE_PRINT,
-  NODE_FN,
-  NODE_FN_CALL,
-  NODE_NULL
+  nodeNum,
+  nodePreInc,
+  nodePreDec,
+  nodePostInc,
+  nodePostDec,
+  nodeAssign,
+  nodeShow,
+  nodeBinOp,
+  nodeVar,
+  nodeUnary,
+  nodeExprStmt,
+  nodeStmts,
+  nodeReturn,
+  nodeBreak,
+  nodeContinue,
+  nodeIf,
+  nodeFor,
+  nodeWhile,
+  nodePrint,
+  nodeFn,
+  nodeFnCall,
+  nodeProgram,
+  nodeBlock,
+  nodeNull
 } NodeType;
 
 typedef struct ASTNode
@@ -145,10 +146,10 @@ ASTNode *astNum(int val);
 ASTNode *astVar(const char *name);
 ASTNode *astBinOp(TokenType op, ASTNode *left, ASTNode *right);
 ASTNode *astUnary(TokenType op, ASTNode *operand);
-ASTNode *astPreIncr(ASTNode *operand);
-ASTNode *astPreDecr(ASTNode *operand);
-ASTNode *astPostIncr(ASTNode *operand);
-ASTNode *astPostDecr(ASTNode *operand);
+ASTNode *astPreIncr(const char *name);
+ASTNode *astPreDecr(const char *name);
+ASTNode *astPostIncr(const char *name);
+ASTNode *astPostDecr(const char *name);
 ASTNode *astAssgn(TokenType op, const char *name, ASTNode *right);
 ASTNode *astShow(void);
 ASTNode *astExprStmt(ASTNode *expr);
@@ -157,11 +158,12 @@ ASTNode *astBreak();
 ASTNode *astReturn(ASTNode *expr);
 ASTNode *astContinue();
 ASTNode *astIf(ASTNode *condition, ASTNode *thenBlock, ASTNode *elseBlock);
-ASTNode *astElse(ASTNode *elseBlock);
 ASTNode *astWhile(ASTNode *condition, ASTNode *body);
 ASTNode *astPrint(ASTNode *expression);
 ASTNode *astFunction(char *funcName, ASTNode *paramList, ASTNode *body);
 ASTNode *astFuncCall(char *name, ASTNode *argList);
+ASTNode *astProgram(ASTNode *stmts);
+ASTNode *astBlock(ASTNode *stmts);
 ASTNode *astFor(ASTNode *init, ASTNode *condition, ASTNode *update,
                 ASTNode *body);
 void astFree(ASTNode *node);

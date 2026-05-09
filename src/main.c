@@ -96,14 +96,10 @@ static void runREPL(SymTable *sym) {
 }
 
 int main(int argc, char *argv[]) {
-  SymTable sym;
-  symInit(&sym);
-
+  SymTable *sym = symInit(NULL);
   if (argc > 1)
-    runFile(argv[1], &sym);
+    runFile(argv[1], sym);
   else
-    runREPL(&sym);
-
-  symFree(&sym);
+    runREPL(sym);
   return 0;
 }
