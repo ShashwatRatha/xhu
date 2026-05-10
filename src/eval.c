@@ -1,22 +1,17 @@
 #include "eval.h"
+#include "errors.h"
+#include "functions.h"
 #include "lexer.h"
 #include "parser.h"
 #include "symtable.h"
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
-
-typedef enum : unsigned char {
-  eNullNode,
-  eDivByZero,
-  eUnknownOpr,
-  eUnknownNodeType,
-  eUndefVar
-} ErrCodes;
 
 typedef enum : unsigned char { sProgExecution } SuccessCodes;
 
-Result evalAST(ASTNode *node, SymTable *table) {
+Result evalAST(ASTNode *node, SymTable *table, FuncTable *fTable) {
   if (!node) {
     return failure(eNullNode);
   }
@@ -27,7 +22,7 @@ Result evalAST(ASTNode *node, SymTable *table) {
   case nodeContinue:
     return cnt();
   case nodeReturn: {
-    Result retVal = evalAST(node->standaloneNode.operand, table);
+    Result retVal = evalAST(node->standaloneNode.operand, table, fTable);
     if (retVal.status == ERR)
       return retVal;
 
@@ -37,12 +32,14 @@ Result evalAST(ASTNode *node, SymTable *table) {
   }
   case nodeFor: {
     SymTable *inTable = symInit(table);
-    Result init = evalAST(node->forNode.init, inTable);
-    if (init.status == ERR)
+    Result init = evalAST(node->forNode.init, inTable, fTable);
+    if (init.status == ERR) {
+      symFree(inTable);
       return init;
+    }
 
     for (;;) {
-      Result cond = evalAST(node->forNode.cond, inTable);
+      Result cond = evalAST(node->forNode.cond, inTable, fTable);
       if (cond.status == ERR) {
         symFree(inTable);
         return cond;
@@ -50,7 +47,7 @@ Result evalAST(ASTNode *node, SymTable *table) {
       if (cond.returnVal == 0)
         break;
 
-      Result body = evalAST(node->forNode.body, inTable);
+      Result body = evalAST(node->forNode.body, inTable, fTable);
       if (body.status == ERR || body.status == RET) {
         symFree(inTable);
         return body;
@@ -58,7 +55,7 @@ Result evalAST(ASTNode *node, SymTable *table) {
       if (body.status == BRK)
         break;
 
-      Result update = evalAST(node->forNode.update, inTable);
+      Result update = evalAST(node->forNode.update, inTable, fTable);
       if (update.status == ERR) {
         symFree(inTable);
         return update;
@@ -71,7 +68,7 @@ Result evalAST(ASTNode *node, SymTable *table) {
   case nodeWhile: {
     SymTable *inTable = symInit(table);
     while (1) {
-      Result condition = evalAST(node->whileNode.condition, inTable);
+      Result condition = evalAST(node->whileNode.condition, inTable, fTable);
       if (condition.status == ERR) {
         symFree(inTable);
         return condition;
@@ -79,7 +76,7 @@ Result evalAST(ASTNode *node, SymTable *table) {
       if (condition.returnVal == 0)
         break;
 
-      Result body = evalAST(node->whileNode.body, inTable);
+      Result body = evalAST(node->whileNode.body, inTable, fTable);
       if (body.status == ERR || body.status == RET) {
         symFree(inTable);
         return body;
@@ -91,14 +88,51 @@ Result evalAST(ASTNode *node, SymTable *table) {
     symFree(inTable);
     return success(sProgExecution);
   }
-    // case nodeFn:
-    // case nodeFnCall:
-    //                 break;
+  case nodeFn: {
+    char *funcName = strdup(node->funcNode.name);
+    ASTNode *paramList = node->funcNode.paramList;
+    ASTNode *funcBody = node->funcNode.body;
+    node->funcNode.paramList = node->funcNode.body = NULL;
+    if (funcTableAdd(fTable, funcName, paramList, funcBody) != 0)
+      return failure(eMemAlloc);
+    return success(sProgExecution);
+  }
+  case nodeFnCall: {
+    long tableIdx = getFuncFromTable(fTable, node->funcCall.name);
+    if (tableIdx == -1)
+      return failure(eUndefFunc);
+
+    Function fn = fTable->funcs[tableIdx];
+    if (fn.paramList->block.stmtCount !=
+        node->funcCall.argList->block.stmtCount)
+      return failure(eMismatchFuncCall);
+
+    SymTable *callTable = symInit(table);
+    for (size_t i = 0; i < fn.paramList->block.stmtCount; i++) {
+      Result argVal =
+          evalAST(node->funcCall.argList->block.stmts[i], table, fTable);
+      if (argVal.status != VAL) {
+        symFree(callTable);
+        return argVal;
+      }
+      symSet(callTable, fn.paramList->block.stmts[i]->name, argVal.returnVal,
+             ASSGN);
+    }
+
+    Result retVal = evalAST(fn.funcBody, callTable, fTable);
+    symFree(callTable);
+
+    if (retVal.status == RET)
+      return value(retVal.returnVal);
+    else if (retVal.status == SUC)
+      return value(0);
+    return retVal;
+  }
   case nodeProgram:
-    return evalAST(node->standaloneNode.operand, table);
+    return evalAST(node->standaloneNode.operand, table, fTable);
   case nodeBlock: {
     SymTable *inTable = symInit(table);
-    Result res = evalAST(node->standaloneNode.operand, inTable);
+    Result res = evalAST(node->standaloneNode.operand, inTable, fTable);
     symFree(inTable);
     return res;
   }
@@ -111,10 +145,10 @@ Result evalAST(ASTNode *node, SymTable *table) {
   case nodeNum:
     return value(node->val);
   case nodeShow:
-    // symShow(table);
+    symShow(table);
     return success(sProgExecution);
   case nodePrint: {
-    Result exprVal = evalAST(node->standaloneNode.operand, table);
+    Result exprVal = evalAST(node->standaloneNode.operand, table, fTable);
     if (exprVal.status != VAL)
       return exprVal;
 
@@ -122,24 +156,24 @@ Result evalAST(ASTNode *node, SymTable *table) {
     return success(sProgExecution);
   }
   case nodeExprStmt:
-    return evalAST(node->standaloneNode.operand, table);
+    return evalAST(node->standaloneNode.operand, table, fTable);
   case nodeStmts:
     for (size_t i = 0; i < node->block.stmtCount; i++) {
-      Result res = evalAST(node->block.stmts[i], table);
+      Result res = evalAST(node->block.stmts[i], table, fTable);
       if (res.status != VAL && res.status != SUC)
         return res;
     }
     return success(sProgExecution);
   case nodeIf: {
-    Result condition = evalAST(node->ifNode.condition, table);
+    Result condition = evalAST(node->ifNode.condition, table, fTable);
     if (condition.status == ERR)
       return condition;
     if (condition.status != VAL)
       return failure(eUnknownNodeType);
     if (condition.returnVal != 0)
-      return evalAST(node->ifNode.thenBlock, table);
+      return evalAST(node->ifNode.thenBlock, table, fTable);
     else if (node->ifNode.elseBlock)
-      return evalAST(node->ifNode.elseBlock, table);
+      return evalAST(node->ifNode.elseBlock, table, fTable);
 
     return success(sProgExecution);
   }
@@ -176,7 +210,7 @@ Result evalAST(ASTNode *node, SymTable *table) {
     return value(val);
   }
   case nodeAssign: {
-    Result rval = evalAST(node->assgnNode.rvalue, table);
+    Result rval = evalAST(node->assgnNode.rvalue, table, fTable);
     if (rval.status == ERR)
       return rval;
 
@@ -196,11 +230,11 @@ Result evalAST(ASTNode *node, SymTable *table) {
     // return newval;
   }
   case nodeBinOp: {
-    Result left = evalAST(node->binOp.left, table);
+    Result left = evalAST(node->binOp.left, table, fTable);
     if (left.status == ERR)
       return left;
 
-    Result right = evalAST(node->binOp.right, table);
+    Result right = evalAST(node->binOp.right, table, fTable);
     if (right.status == ERR)
       return right;
 
@@ -250,7 +284,7 @@ Result evalAST(ASTNode *node, SymTable *table) {
     }
   }
   case nodeUnary: {
-    Result opr = evalAST(node->standaloneNode.operand, table);
+    Result opr = evalAST(node->standaloneNode.operand, table, fTable);
     if (opr.status == ERR)
       return opr;
 

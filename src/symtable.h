@@ -9,7 +9,7 @@
 typedef enum {
   SYM_OK,        /* operation succeeded                          */
   SYM_DIVZERO,   /* division by zero error                       */
-  SYM_ERR_FULL,  /* table is at capacity                         */
+  SYM_MEM_ALLOC, /* table is at capacity                         */
   SYM_ERR_UNDEF, /* variable is not bound                        */
   SYM_ERR_NAME   /* reserved for future name-length validation   */
 } SymResult;
@@ -21,7 +21,6 @@ typedef struct
   int val;
 } Symbol;
 
-/* Flat array symbol table — linear scan, sufficient for interactive use. */
 typedef struct SymTable
 {
   Symbol *entries;
