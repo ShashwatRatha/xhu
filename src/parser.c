@@ -143,20 +143,17 @@ ASTNode *parseFunction(Parser *p) {
 
   char *funcName = parserConsume(p).name;
   if (parserConsume(p).type != LPAREN) {
-    free(funcName);
     p->had_error = 1;
     return NULL;
   }
 
   ASTNode *paramList = parseParams(p);
   if (!paramList) {
-    free(funcName);
     p->had_error = 1;
     return NULL;
   }
 
   if (parserConsume(p).type != RPAREN) {
-    free(funcName);
     astFree(paramList);
     p->had_error = 1;
     return NULL;
@@ -164,7 +161,6 @@ ASTNode *parseFunction(Parser *p) {
 
   ASTNode *body = parseBlock(p);
   if (!body) {
-    free(funcName);
     astFree(paramList);
     p->had_error = 1;
     return NULL;
@@ -529,11 +525,14 @@ ASTNode *parseUnary(Parser *p) {
       return NULL;
     }
 
-    if (op == MINUS || op == NEG)
+    if (op == MINUS || op == NOT || op == BIT_NOT)
       return astUnary(op, operand);
-    else
-      return (op == INCR) ? astPreIncr(operand->name)
-                          : astPreDecr(operand->name);
+    else {
+      ASTNode *returnVal =
+          (op == INCR) ? astPreIncr(operand->name) : astPreDecr(operand->name);
+      astFree(operand);
+      return returnVal;
+    }
   } else
     return parsePostfix(p);
 }
@@ -553,8 +552,10 @@ ASTNode *parsePostfix(Parser *p) {
       return NULL;
     }
     parserConsume(p);
-    return (op == INCR) ? astPostIncr(primary->name)
-                        : astPostDecr(primary->name);
+    ASTNode *returnVal =
+        (op == INCR) ? astPostIncr(primary->name) : astPostDecr(primary->name);
+    astFree(primary);
+    return returnVal;
   } else
     return primary;
 }

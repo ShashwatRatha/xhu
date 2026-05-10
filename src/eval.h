@@ -1,6 +1,8 @@
 #ifndef EVAL_H_
 #define EVAL_H_
 
+#include "functions.h"
+
 struct ASTNode;
 typedef struct ASTNode ASTNode;
 
@@ -34,6 +36,6 @@ static inline Result ret(int value) {
   return (Result){ .status = RET, .returnVal = value };
 }
 
-Result evalAST(ASTNode *node, SymTable *table);
+Result evalAST(ASTNode *node, SymTable *table, FuncTable *fTable);
 
 #endif
