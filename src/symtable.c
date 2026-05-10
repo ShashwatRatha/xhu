@@ -17,17 +17,6 @@ SymTable *symInit(SymTable *parent) {
   return t;
 }
 
-static int symExists(SymTable *t, const char *name) {
-  for (size_t i = 0; i < t->count; i++)
-    if (!strcmp(name, t->entries[i].name))
-      return i;
-
-  if (t->parent)
-    return symExists(t->parent, name);
-
-  return -1;
-}
-
 SymResult symGet(SymTable *t, const char *name, int *out) {
   for (size_t i = 0; i < t->count; i++) {
     if (!strcmp(name, t->entries[i].name)) {
@@ -41,12 +30,49 @@ SymResult symGet(SymTable *t, const char *name, int *out) {
   return SYM_ERR_UNDEF;
 }
 
-// void symShow(const SymTable *t) {
-//   printf("=== BINDINGS TILL NOW ===\n");
-//   for (size_t i = 0; i < t->count; i++)
-//     printf("%s: %d\n", t->entries[i].name, t->entries[i].val);
-//   printf("\n");
-// }
+void symShow(const SymTable *t) {
+  char **seen = NULL;
+  size_t seenCount = 0;
+  size_t seenCap = 0;
+
+  printf("=== BINDINGS ===\n");
+
+  const SymTable *scope = t;
+  while (scope) {
+    for (size_t i = 0; i < scope->count; i++) {
+      const char *name = scope->entries[i].name;
+
+      // skip if an inner scope already printed this name
+      int shadowed = 0;
+      for (size_t j = 0; j < seenCount; j++) {
+        if (!strcmp(seen[j], name)) {
+          shadowed = 1;
+          break;
+        }
+      }
+      if (shadowed)
+        continue;
+
+      printf("  %s = %d\n", name, scope->entries[i].val);
+
+      // record name as seen
+      if (seenCount >= seenCap) {
+        seenCap = seenCap ? seenCap * 2 : 8;
+        char **tmp = realloc(seen, seenCap * sizeof(*tmp));
+        if (!tmp) {
+          free(seen);
+          return;
+        }
+        seen = tmp;
+      }
+      seen[seenCount++] = (char *)name;
+    }
+    scope = scope->parent;
+  }
+
+  free(seen);
+  printf("\n");
+}
 
 void symFree(SymTable *t) {
   Symbol *entries = t->entries;
@@ -56,13 +82,12 @@ void symFree(SymTable *t) {
   free(t);
 }
 
-SymResult symAdd(SymTable *t, const char *name, int val) {
+static SymResult symAdd(SymTable *t, const char *name, int val) {
   if (t->count >= t->capacity) {
     t->capacity <<= 1;
     Symbol *tmp = realloc(t->entries, t->capacity * sizeof(*tmp));
     if (!tmp) {
-      symFree(t);
-      return SYM_ERR_FULL;
+      return SYM_MEM_ALLOC;
     }
     t->entries = tmp;
   }
@@ -109,6 +134,13 @@ static SymResult symUpdate(SymTable *t, int i, int op, int rval) {
  * Compound operators (+=, -= …) require the variable to already be bound. */
 
 SymResult symSet(SymTable *t, const char *name, int val, int op) {
+  if (op == ASSGN) {
+    for (size_t i = 0; i < t->count; i++) {
+      if (!strcmp(t->entries[i].name, name))
+        return symUpdate(t, i, ASSGN, val);
+    }
+    return symAdd(t, name, val);
+  }
   // Walk chain to find the table that owns the variable
   SymTable *owner = t;
   while (owner) {
@@ -118,7 +150,6 @@ SymResult symSet(SymTable *t, const char *name, int val, int op) {
     }
     owner = owner->parent;
   }
-  if (op != ASSGN)
-    return SYM_ERR_UNDEF;
-  return symAdd(t, name, val);
+
+  return SYM_ERR_UNDEF;
 }

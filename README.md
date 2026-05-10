@@ -1,169 +1,133 @@
-# ALG — Integer Algebra Interpreter
+# alg
 
-A lightweight interpreter for a custom integer-based expression language, written in C.
+`alg` is a lightweight integer expression interpreter written in C. It supports arithmetic, logical and bitwise operations, control flow, functions, and scoped variables, all implemented through a custom lexer, parser, AST, and evaluator pipeline.
 
-It supports arithmetic, logical, and bitwise operations, along with variables, assignments, and increment/decrement semantics — all implemented through a full compiler-style pipeline:
+---
 
-**Lexer → Parser → AST → Evaluator**
+## Overview
+
+The interpreter follows a classical compilation pipeline:
+
+Source Code → Lexer → Tokens → Parser → AST → Evaluator → Result
+
+- The lexer converts raw input into tokens.
+- The parser builds an Abstract Syntax Tree (AST).
+- The evaluator executes the AST using symbol and function tables.
 
 ---
 
 ## Features
 
-* ✅ Arithmetic: `+ - * / %`
-* ✅ Bitwise: `& | ^ << >>`
-* ✅ Logical: `&& || !`
-* ✅ Equality: `== !=`
-* ✅ Assignment:
-
-  * Simple: `=`
-  * Compound: `+= -= *= /= <<= >>=`
-* ✅ Increment / Decrement:
-
-  * Prefix: `++x`, `--x`
-  * Postfix: `x++`, `x--`
-* ✅ Variables with symbol table
-* ✅ Interactive REPL
-* ✅ File execution mode
-* ✅ `show` keyword to display all variables
-
----
-
-## Architecture
-
-This project follows a classic interpreter design:
-
-```
-Input → Lexer → Tokens → Parser → AST → Evaluator → Output
-```
-
-### Components
-
-* **Lexer**
-  Converts raw input into tokens using a finite state machine
-
-* **Parser**
-  Recursive descent parser implementing operator precedence
-
-* **AST (Abstract Syntax Tree)**
-  Structured representation of expressions and statements
-
-* **Evaluator**
-  Walks the AST and computes results
-
-* **Symbol Table**
-  Stores variable bindings using a flat array
+- Integer arithmetic: + - * / %
+- Bitwise operations: & | ^ ~ << >>
+- Logical operations: && || !
+- Comparisons: == != < <= > >=
+- Assignment:
+  = += -= *= /= %= <<= >>=
+- Increment / Decrement:
+  ++x  x++  --x  x--
+- Control flow:
+  if (cond) { ... } else { ... }
+  while (cond) { ... }
+  for (init; cond; update) { ... }
+- Loop control:
+  break
+  continue
+- Functions:
+  func name(a, b) { ... return expr }
+- Output:
+  print expr
+  show
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
-```
-.
-├── lexer.c / lexer.h        # Tokenization (FSM-based)
-├── parser.c / parser.h      # Recursive descent parser
-├── astdefs.c                # AST node constructors & memory handling
-├── eval.c / eval.h          # AST evaluation
-├── symtable.c / symtable.h  # Variable storage
-├── grammar.txt              # Language grammar specification
-├── main.c                   # Entry point (REPL + file execution)
-```
+### Core Components
+
+- Lexer: tokenizes input
+- Parser: builds AST
+- AST: node constructors and memory management
+- Evaluator: executes AST
+
+### Runtime Systems
+
+- Symbol Table: variable bindings with scope
+- Function Table: stores user-defined functions
+- Execution Driver: REPL and file execution
+- Error Handling: centralized error system
 
 ---
 
-## ⚙️ Build Instructions
-
-Compile using `gcc`:
+## Building
 
 ```bash
-gcc *.c -o alg
+scripts/build
+
 ```
 
 ---
 
-## ▶️ Usage
+## Usage
 
-### 🔹 Interactive Mode (REPL)
+### REPL
 
-```bash
 ./alg
-```
 
-Example:
+### Run a File
 
-```
->>> x = 5
->>> y = x * 2
->>> y++
-10
->>> show
-=== BINDINGS TILL NOW ===
-x: 5
-y: 11
-```
+./alg program.alg
 
 ---
 
-### 🔹 Run from File
+## Example
 
-```bash
-./alg program.txt
-```
-
----
-
-## 🧩 Language Overview
-
-### Example expressions
-
-```
 x = 10
-y = x * 2 + 3
-z = y << 1
-z++
-```
+y = 20
 
-### Grammar Highlights
+print x + y
 
-* Expressions follow strict precedence rules
-* Right-associative logical and bitwise chains
-* No chained assignment (`a = b = 5` not supported)
-* Only integer arithmetic
+func add(a, b) {
+  return a + b
+}
 
-Full grammar available in:
+print add(3, 4)
 
-* `grammar.txt` 
+for (i = 0; i < 5; i = i + 1) {
+  print i
+}
 
 ---
 
-## ⚠️ Limitations
+## Execution Model
 
-* ❌ No floating point support
-* ❌ No control flow (if/while/for)
-* ❌ No relational operators (`< <= > >=`)
-* ❌ Fixed-size symbol table (64 variables)
-* ❌ Error handling uses sentinel values (`0`)
-
----
-
-## 🧠 Key Concepts Demonstrated
-
-* Lexical analysis (FSM-based tokenizer)
-* Recursive descent parsing
-* Abstract Syntax Trees (AST)
-* Expression evaluation via tree traversal
-* Symbol table design
-* Operator precedence handling
-* Memory management in C
+- Each block introduces a new scope.
+- Variables are resolved lexically.
+- Functions are globally stored.
+- Evaluation returns structured results.
 
 ---
 
-## 📈 Possible Improvements
+## Error Handling
 
-* Add relational operators (`<, >, <=, >=`)
-* Introduce control flow constructs
-* Replace symbol table with hash table
-* Add type system (floats, strings)
-* Improve error handling (no sentinel values)
-* Generate intermediate representation (IR)
-* Add bytecode or JIT execution
+Errors are printed as:
+
+alg: <message>
+
+---
+
+## Design Notes
+
+- Recursive AST evaluation
+- Manual memory management
+- Lexical scoping via chained tables
+- Operator precedence encoded in parser
+
+---
+
+## Possible Extensions
+
+- Floating point support
+- Arrays and data structures
+- Bytecode compilation
+- Static typing
