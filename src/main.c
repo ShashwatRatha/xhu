@@ -9,5 +9,7 @@ int main(int argc, char *argv[]) {
     runFile(argv[1], sym, funcs);
   else
     runREPL(sym, funcs);
+  symFree(sym);
+  freeFuncTable(funcs);
   return 0;
 }
