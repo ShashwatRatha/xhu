@@ -15,7 +15,7 @@
 #define NEXT ">>> "
 #define CONTINUE "... "
 #define BANNER                                                                 \
-  "alg " VERSION "  —  integer expression interpreter\n\n"                   \
+  "xhu " VERSION "  —  integer expression interpreter\n\n"                   \
   "  arithmetic   :  + - * / %\n"                                              \
   "  bitwise      :  & | ^ ~ << >>\n"                                          \
   "  logical      :  && || !\n"                                                \
@@ -64,7 +64,7 @@ void runLine(const char *line, SymTable *sym, FuncTable *funcs) {
 void runFile(const char *path, SymTable *sym, FuncTable *funcs) {
   FILE *f = fopen(path, "r");
   if (!f) {
-    fprintf(stderr, "alg: cannot open '%s': %s\n", path, strerror(errno));
+    fprintf(stderr, "xhu: cannot open '%s': %s\n", path, strerror(errno));
     return;
   }
 
