@@ -29,9 +29,9 @@ static inline void printError(unsigned char errCode) {
   };
 
   if (errCode < sizeof msgs / sizeof *msgs && msgs[errCode])
-    dprintf(STDERR_FILENO, "alg: %s\n", msgs[errCode]);
+    dprintf(STDERR_FILENO, "xhu: %s\n", msgs[errCode]);
   else
-    dprintf(STDERR_FILENO, "alg: unknown error (code %u)\n", (unsigned)errCode);
+    dprintf(STDERR_FILENO, "xhu: unknown error (code %u)\n", (unsigned)errCode);
 }
 
 #endif

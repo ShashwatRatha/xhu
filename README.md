@@ -1,6 +1,6 @@
-# alg
+# xhu 
 
-`alg` is a lightweight integer expression interpreter written in C. It supports arithmetic, logical and bitwise operations, control flow, functions, and scoped variables, all implemented through a custom lexer, parser, AST, and evaluator pipeline.
+`xhu` is a lightweight integer expression interpreter written in C. It supports arithmetic, logical and bitwise operations, control flow, functions, and scoped variables, all implemented through a custom lexer, parser, AST, and evaluator pipeline.
 
 ---
 
@@ -72,11 +72,11 @@ scripts/build
 
 ### REPL
 
-./alg
+./xhu
 
 ### Run a File
 
-./alg program.alg
+./xhu program.xhu
 
 ---
 
@@ -112,7 +112,7 @@ for (i = 0; i < 5; i = i + 1) {
 
 Errors are printed as:
 
-alg: <message>
+xhu: <message>
 
 ---
 
