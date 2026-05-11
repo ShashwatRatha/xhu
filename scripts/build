@@ -1,3 +1,4 @@
 #!/bin/zsh
 
-gcc src/*.c -o xhu || clang src/*.c -o xhu
+cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON && make -C build
+cp build/compile_commands.json ./

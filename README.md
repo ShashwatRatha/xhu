@@ -72,19 +72,11 @@ scripts/build
 
 ### REPL
 
-<<<<<<< HEAD
-./alg
-
-### Run a File
-
-./alg program.alg
-=======
 ./xhu
 
 ### Run a File
 
 ./xhu program.xhu
->>>>>>> dev
 
 ---
 
@@ -120,11 +112,7 @@ for (i = 0; i < 5; i = i + 1) {
 
 Errors are printed as:
 
-<<<<<<< HEAD
-alg: <message>
-=======
 xhu: <message>
->>>>>>> dev
 
 ---
 

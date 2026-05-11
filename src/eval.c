@@ -182,7 +182,7 @@ Result evalAST(ASTNode *node, SymTable *table, FuncTable *fTable) {
     int val = 0;
     if (symGet(table, name, &val) != SYM_OK)
       return failure(eUndefVar);
-    symSet(table, name, val + 1, ASSGN);
+    symSet(table, name, 1, ADD_ASSGN);
     return value(val + 1);
   }
   case nodePreDec: {
@@ -190,7 +190,7 @@ Result evalAST(ASTNode *node, SymTable *table, FuncTable *fTable) {
     int val = 0;
     if (symGet(table, name, &val) != SYM_OK)
       return failure(eUndefVar);
-    symSet(table, name, val - 1, ASSGN);
+    symSet(table, name, 1, SUB_ASSGN);
     return value(val - 1);
   }
   case nodePostInc: {
@@ -198,7 +198,7 @@ Result evalAST(ASTNode *node, SymTable *table, FuncTable *fTable) {
     int val = 0;
     if (symGet(table, name, &val) != SYM_OK)
       return failure(eUndefVar);
-    symSet(table, name, val + 1, ASSGN);
+    symSet(table, name, 1, ADD_ASSGN);
     return value(val);
   }
   case nodePostDec: {
@@ -206,7 +206,7 @@ Result evalAST(ASTNode *node, SymTable *table, FuncTable *fTable) {
     int val = 0;
     if (symGet(table, name, &val) != SYM_OK)
       return failure(eUndefVar);
-    symSet(table, name, val - 1, ASSGN);
+    symSet(table, name, 1, SUB_ASSGN);
     return value(val);
   }
   case nodeAssign: {

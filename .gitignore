@@ -1,3 +1,5 @@
 xhu
 test*
+build/
+compile_commands.json
 further-work.txt
